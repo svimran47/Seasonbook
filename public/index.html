@@ -10,7 +10,7 @@
 <body>
 <div class="app">
   <header class="top">
-    <a class="brand" href="#tonight">
+    <a class="brand" href="#shows">
       <svg viewBox="0 0 256 256" aria-hidden="true">
         <defs><linearGradient id="m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD37E"/><stop offset="1" stop-color="#D98A2B"/></linearGradient></defs>
         <rect x="28" y="54" width="200" height="160" rx="22" fill="#1E2532" />
@@ -21,16 +21,21 @@
       </svg>
       <span>seasonbook</span>
     </a>
-    <span class="build">local · wk1</span>
+    <div class="topacts">
+      <button class="tico" data-action="alerts" title="Airtime alerts" aria-label="Airtime alerts">
+        <svg viewBox="0 0 24 24"><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16S18 14 18 9"/><path d="M10.3 19.5a2 2 0 0 0 3.4 0"/></svg>
+      </button>
+      <a class="avatar" href="#profile" title="Profile"><span id="avletter">S</span></a>
+    </div>
   </header>
 
   <main id="view"></main>
 
   <nav class="bottom">
-    <a href="#tonight" data-view="tonight"><span>🌙</span>Tonight</a>
-    <a href="#shelf"  data-view="shelf"><span>📚</span>Shelf</a>
-    <a href="#search" data-view="search"><span>🔍</span>Search</a>
-    <a href="#export" data-view="export"><span>📤</span>Export</a>
+    <a href="#shows" data-view="shows"><svg viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M8 21.5h8"/><path d="M10.6 9.4v5.2l4.2-2.6z" fill="currentColor" stroke="none"/></svg><span>Shows</span></a>
+    <a href="#movies" data-view="movies"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 4v16M17 4v16M3 12h4M17 12h4"/></svg><span>Movies</span></a>
+    <a href="#discover" data-view="discover"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.6 8.4l-2.3 5.4-5.3 2.3 2.3-5.4z"/></svg><span>Discover</span></a>
+    <a href="#profile" data-view="profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5.5 19.5c1.3-3.2 3.6-4.8 6.5-4.8s5.2 1.6 6.5 4.8"/></svg><span>Profile</span></a>
   </nav>
 
   <div id="toast" role="status"></div>

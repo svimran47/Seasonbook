@@ -17,13 +17,14 @@ npm run smoke   # end-to-end checks against the running server
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /` | internal PWA (search / follow / tonight / ICS feed) |
+| `GET /` | internal PWA — TV-Time-style tabs: Shows (front) · Movies · Discover · Profile |
 | `GET /api` | endpoint docs |
 | `GET /api/search?q=` | TVmaze search (compact results) |
 | `GET /api/shows/:id` | cached show + next/last episode (auto-syncs on first hit) |
 | `POST /api/follow` | `{deviceId, showId, action: "add" or "remove"}` — add triggers a sync |
-| `GET /api/follows?deviceId=` | your shelf |
+| `GET /api/follows?deviceId=` | your watch list |
 | `GET /api/tonight?deviceId=&window=24` | upcoming episodes in a UTC window (`from=` for testing) |
+| `GET /api/schedule?country=US` | today's broadcast-TV listings per country (Discover tab) |
 | `POST /api/sync` | `{ids: [..]}` or `{all: true, force: true}` |
 | `GET /calendar.ics?deviceId=` | calendar feed (past 7 days → next 180 days); subscribe in Google/Apple Calendar |
 | `GET /api/shows/:id/episodes?deviceId=` | episode list with per-device watched flags |

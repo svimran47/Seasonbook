@@ -78,4 +78,9 @@ $from = ([datetime]$anchor.air_utc).ToUniversalTime().AddHours(-2).ToString("yyy
 $ton2 = Invoke-RestMethod "$base/api/tonight?deviceId=smoke-test&from=$from&window=96"
 Write-Host ("TONIGHT+  : {0} rows near anchor; watched flags carried" -f $ton2.count)
 
+# 12. Discover schedule passthrough (today's broadcast listings)
+$sched = Invoke-RestMethod "$base/api/schedule?country=GB"
+if ($sched.listings.Count -lt 3) { throw "schedule listings came back thin for GB" }
+Write-Host ("SCHEDULE  : {0} GB listings today ({1}); first = {2} @ {3}" -f $sched.count, $sched.date, $sched.listings[0].show, $sched.listings[0].time)
+
 Write-Host "SMOKE OK"

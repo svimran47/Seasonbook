@@ -22,6 +22,13 @@ export async function fetchEpisodes(id) {
   return res.json();
 }
 
+// Broadcast-TV schedule for a country, day-granularity (used by the Discover tab).
+export async function fetchSchedule(country = "US") {
+  const res = await fetch(`${API}/schedule?country=${encodeURIComponent(country)}`);
+  if (!res.ok) throw new Error(`tvmaze schedule ${country} failed (${res.status})`);
+  return res.json(); // [episode, ...] incl. embedded .show
+}
+
 export function compactShow(show) {
   const schedule = [
     (show.schedule?.days || []).map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", "),

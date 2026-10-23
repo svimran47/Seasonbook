@@ -19,6 +19,7 @@ const state = {
   show: null, episodes: null,
   reveal: false,
   posterMode: localStorage.getItem("sb_post") || "posters",
+  discCountry: localStorage.getItem("sb_disc") || "US",
   seq: 0,
 };
 
@@ -68,9 +69,20 @@ function countdown(iso) {
 }
 
 /* ── router ──────────────────────────────────────────── */
+// weekend-1 hashes → the TV-Time-style tab set (front = Shows)
+const REDIRECT = { tonight: "shows", shelf: "shows", search: "discover", export: "profile" };
+
 async function render() {
   state.reveal = state.reveal || false;
-  const hash = location.hash || "#tonight";
+  let hash = location.hash || "#shows";
+  if (REDIRECT[hash.slice(1)]) {
+    location.hash = "#" + REDIRECT[hash.slice(1)];
+    return;
+  }
+  if (hash !== "#shows" && hash !== "#movies" && hash !== "#discover" && hash !== "#profile" && !hash.startsWith("#show/")) {
+    location.hash = "#shows";
+    return;
+  }
   const seq = ++state.seq;
   const view = $("#view");
   view.firstRenderDone = view.firstRenderDone || false;
@@ -78,22 +90,21 @@ async function render() {
   const punch = (html) => { if (seq === state.seq) { view.innerHTML = `<div class="enter">${html}</div>`; window.scrollTo(0, 0); } };
 
   // nav active state
-  const section = hash.startsWith("#show/") ? "shelf" : hash.replace("#", "");
+  const section = hash.startsWith("#show/") ? "shows" : hash.replace("#", "");
   document.querySelectorAll(".bottom a").forEach((a) => a.classList.toggle("on", a.dataset.view === section));
 
   try {
     if (hash.startsWith("#show/")) {
       const id = Number(hash.split("/")[1]);
       await renderShow(id, punch);
-    } else if (hash === "#shelf") {
-      await renderShelf(punch);
-    } else if (hash === "#search") {
-      await renderSearch(punch);
-    } else if (hash === "#export") {
-      await renderExport(punch);
-    } else {
-      if (hash !== "#tonight") location.hash = "#tonight";
-      await renderTonight(punch);
+    } else if (hash === "#shows") {
+      await renderShows(punch);
+    } else if (hash === "#movies") {
+      await renderMovies(punch);
+    } else if (hash === "#discover") {
+      await renderDiscover(punch);
+    } else if (hash === "#profile") {
+      await renderProfile(punch);
     }
   } catch {
     punch(`<div class="empty"><span class="e">📕</span>Something unhinged itself.<br><button class="btn quiet" onclick="location.reload()">Reload</button></div>`);
@@ -105,31 +116,32 @@ async function ensureFollows() {
   return state.follows;
 }
 
-/* ── tonight ─────────────────────────────────────────── */
-async function renderTonight(punch) {
+/* ── shows (front view — Up Next strip + Watch List, TV Time style) ── */
+async function renderShows(punch) {
   punch(`
-    <h1 class="h-view">Tonight</h1>
-    <p class="h-sub">${esc(fmtDay(new Date().toISOString()))} · your shelf's airing schedule</p>
-    <div class="chips">
-      <button class="chip ${state.tonightWin === 24 ? "on" : ""}" data-action="win" data-v="24">Next 24 h</button>
-      <button class="chip ${state.tonightWin === 168 ? "on" : ""}" data-action="win" data-v="168">Next 7 days</button>
-    </div>
+    <h1 class="h-view">Shows</h1>
+    <p class="h-sub">${esc(fmtDay(new Date().toISOString()))} · your watch list and what's airing next</p>
     <div class="sk skrow"></div><div class="sk skrow"></div><div class="sk skrow"></div>
     <p class="note" style="text-align:center;margin-top:18px">Schedule data by <a href="https://www.tvmaze.com/" target="_blank" rel="noopener">TVmaze</a></p>
   `);
-  const j = await api(`/api/tonight?deviceId=${deviceId}&window=${state.tonightWin}`);
-  const eps = j.episodes;
+  const j = await ensureFollows();
+  const shows = j.shows;
+
+  const eps = shows.length
+    ? (await api(`/api/tonight?deviceId=${deviceId}&window=${state.tonightWin}`)).episodes
+    : [];
   state.tonight = eps;
   state.onAir = {};
   for (const e of eps) if (!e.watched) state.onAir[e.show_id] = true;
 
+  // Up Next — TV Time's "Upcoming", surfaced at the top of the Shows tab
   let hero = "";
   const next = eps.find((e) => !e.watched && new Date(e.air_utc).getTime() >= Date.now());
   if (next) {
     const mins = (new Date(next.air_utc).getTime() - Date.now()) / 60000;
     hero = `<div class="next">
       <div style="flex:1;min-width:0">
-        <div class="k">NEXT UP</div>
+        <div class="k">UP NEXT</div>
         <b>${esc(next.show_name)} · ${esc(code(next))}</b>
         <span class="cd" data-cd data-iso="${esc(next.air_utc)}">${esc(countdown(next.air_utc))}</span>
       </div>
@@ -149,43 +161,32 @@ async function renderTonight(punch) {
     </div>`;
   }).join("");
 
-  const empty = `
-    <div class="empty"><span class="e">🌙</span>
-      Nothing airing ${state.tonightWin === 24 ? "in the next 24 hours" : "this week"} on your shelf.<br><br>
-      <a class="btn primary" href="#search">Find shows to follow</a></div>`;
-
-  punch(`
-    <h1 class="h-view">Tonight</h1>
-    <p class="h-sub">${esc(fmtDay(new Date().toISOString()))} · ${eps.length} airing</p>
+  const upcoming = shows.length ? `
     <div class="chips">
       <button class="chip ${state.tonightWin === 24 ? "on" : ""}" data-action="win" data-v="24">Next 24 h</button>
       <button class="chip ${state.tonightWin === 168 ? "on" : ""}" data-action="win" data-v="168">Next 7 days</button>
     </div>
     ${hero || ""}
-    ${eps.length ? rows : empty}
-    ${eps.length ? '<p class="note" style="text-align:center;margin-top:16px">Schedule data by <a href="https://www.tvmaze.com/" target="_blank" rel="noopener">TVmaze</a></p>' : "Data by <span class='note'><a href='https://www.tvmaze.com/' target='_blank' rel='noopener'>TVmaze</a></span>"}
+    ${eps.length ? rows : `<div class="empty" style="padding:18px"><span class="e">🌙</span>Nothing airing ${state.tonightWin === 24 ? "in the next 24 hours" : "this week"} on your watch list.</div>`}
+  ` : "";
+
+  punch(`
+    <h1 class="h-view">Shows</h1>
+    <p class="h-sub">${esc(fmtDay(new Date().toISOString()))} · ${shows.length} on your watch list${eps.length ? ` · ${eps.length} airing` : ""}</p>
+    ${upcoming}
+    ${watchListBlock(shows)}
+    <p class="note" style="text-align:center;margin-top:16px">Schedule data by <a href="https://www.tvmaze.com/" target="_blank" rel="noopener">TVmaze</a></p>
   `);
 }
 
-/* ── shelf ───────────────────────────────────────────── */
-async function renderShelf(punch) {
-  punch(`
-    <h1 class="h-view">Shelf</h1>
-    <p class="h-sub">your shows — history owned, exportable, never deleted</p>
-    <div class="sk skrow"></div><div class="sk skrow"></div><div class="sk skrow"></div>
-  `);
-  const j = await ensureFollows();
-  const shows = j.shows;
-
+function watchListBlock(shows) {
   if (!shows.length) {
-    punch(`
-      <h1 class="h-view">Shelf</h1><p class="h-sub">your shows — history owned, exportable, never deleted</p>
-      <div class="empty"><span class="e">🪴</span>The shelf is empty.<br>
-      Follow your first series and tonight's schedule appears here.<br><br>
-      <a class="btn primary" href="#search">Find shows</a></div>
-      <p class="note" style="margin-top:14px;text-align:center">TV Time GDPR import arrives with accounts (weekend 3). Nothing here is throwaway — export anytime.</p>
-    `);
-    return;
+    return `
+      <div class="sectT">WATCH LIST</div>
+      <div class="empty"><span class="e">🪴</span>The watch list is empty.<br>
+      Follow your first series and its airtimes light up here.<br><br>
+      <a class="btn primary" href="#discover">Find shows</a></div>
+      <p class="note" style="margin-top:14px;text-align:center">TV Time GDPR import arrives with accounts (weekend 3). Nothing here is throwaway — export anytime.</p>`;
   }
 
   const pct = (s) => (s.ep_total ? Math.min(100, Math.round((s.watched * 100) / s.ep_total)) : 0);
@@ -213,22 +214,19 @@ async function renderShelf(punch) {
       </div>`).join("")}</div>`;
   }
 
-  punch(`
-    <h1 class="h-view">Shelf</h1>
-    <p class="h-sub">${shows.length} show${shows.length === 1 ? "" : "s"} · history owned, exportable, never deleted</p>
-    <div class="chips">
+  return `
+    <div class="sectT">WATCH LIST · ${shows.length}</div>
+    <div class="chips" style="margin-bottom:12px">
       <button class="chip ${state.posterMode === "posters" ? "on" : ""}" data-action="mode" data-v="posters">Poster view</button>
       <button class="chip ${state.posterMode === "spines" ? "on" : ""}" data-action="mode" data-v="spines">Spine view</button>
     </div>
-    ${body}
-    <p class="note" style="text-align:center;margin-top:18px">TV Time GDPR import arrives with accounts (weekend 3) — export anytime meanwhile.</p>
-  `);
+    ${body}`;
 }
 
 /* ── show detail ─────────────────────────────────────── */
 async function renderShow(id, punch) {
   punch(`
-    <button class="crumb" onclick="location.hash='#shelf'">← shelf</button>
+    <button class="crumb" onclick="location.hash='#shows'">← shows</button>
     <div class="sk skrow"></div><div class="sk skrow" style="height:80px"></div><div class="sk skrow"></div><div class="sk skrow"></div>
   `);
   const [showJ, epJ] = await Promise.all([
@@ -294,7 +292,7 @@ async function renderShow(id, punch) {
   }
 
   punch(`
-    <button class="crumb" onclick="location.hash='#shelf'">← shelf</button>
+    <button class="crumb" onclick="location.hash='#shows'">← shows</button>
     <h1 class="heroT">${esc(s.name)}</h1>
     <p class="heroS">${esc(s.network || "")}${s.network ? " · " : ""}${esc(s.status || "")}${s.schedule ? " · " + esc(s.schedule) : ""}</p>
     ${nextCard}
@@ -305,14 +303,29 @@ async function renderShow(id, punch) {
   `);
 }
 
-/* ── search ──────────────────────────────────────────── */
-async function renderSearch(punch) {
+/* ── movies (TV Time tab #2 — lands with accounts) ────── */
+async function renderMovies(punch) {
   punch(`
-    <h1 class="h-view">Search</h1>
-    <p class="h-sub">find shows by name — follow puts them on your shelf</p>
+    <h1 class="h-view">Movies</h1>
+    <p class="h-sub">the watch list gets a second book — films</p>
+    <div class="empty"><span class="e">🎬</span>Film tracking arrives with accounts (weekend 3).<br>
+    Movies get the same rules as shows: watch list, progress, spoiler-safe pages, full export — nothing walled in.</div>
+    <p class="note" style="text-align:center;margin-top:14px">Shows first, then films — the watch-state spine already carries both.</p>
+  `);
+}
+
+/* ── discover (search + on-TV-today listings) ────────── */
+async function renderDiscover(punch) {
+  punch(`
+    <h1 class="h-view">Discover</h1>
+    <p class="h-sub">find shows to follow · see what's on TV today</p>
     <div class="searchrow"><input id="q" placeholder="Try: Breaking Bad, Arcane, Game of Thrones…" autocomplete="off"></div>
     <div id="sr"></div>
-    <p class="note" style="text-align:center;margin-top:16px">Catalog data by <a href="https://www.tvmaze.com/" target="_blank" rel="noopener">TVmaze</a></p>
+    <div class="sectT">ON TV TODAY</div>
+    <div class="chips">${["US", "GB", "IN", "CA", "AU"].map((c) =>
+      `<button class="chip ${state.discCountry === c ? "on" : ""}" data-action="disc-country" data-v="${c}">${c}</button>`).join("")}</div>
+    <div id="sched"><div class="sk skrow"></div><div class="sk skrow"></div><div class="sk skrow"></div></div>
+    <p class="note" style="text-align:center;margin-top:16px">Listings + catalog by <a href="https://www.tvmaze.com/" target="_blank" rel="noopener">TVmaze</a> · broadcast TV only</p>
   `);
   const input = $("#q");
   let t;
@@ -324,9 +337,11 @@ async function renderSearch(punch) {
 
   async function doSearch(q) {
     const box = $("#sr");
+    if (!box) return;
     if (!q) { box.innerHTML = ""; return; }
     try {
       const j = await api(`/api/search?q=${encodeURIComponent(q)}`);
+      if (!box.isConnected) return;
       const follows = await ensureFollows();
       const ids = new Set(follows.shows.map((x) => x.id));
       box.innerHTML = j.results.length
@@ -336,21 +351,77 @@ async function renderSearch(punch) {
             <div class="d"><b>${esc(s.name)}</b>
               <span>${esc(s.network || "—")} · ${esc(s.status || "")}${s.premiered ? " · " + esc(s.premiered.slice(0, 4)) : ""}</span></div>
             <button class="btn ${ids.has(s.id) ? "" : "primary"}" data-action="follow" data-id="${s.id}" data-on="${ids.has(s.id) ? 1 : 0}">
-              ${ids.has(s.id) ? "✓ On shelf" : "+ Follow"}</button>
+              ${ids.has(s.id) ? "✓ On list" : "+ Follow"}</button>
           </div>`).join("")
         : `<div class="empty"><span class="e">🔎</span>Nothing found for “${esc(q)}”</div>`;
     } catch {
       box.innerHTML = `<div class="empty"><span class="e">📡</span>Search hiccupped. Try again.</div>`;
     }
   }
+
+  try {
+    const j = await api(`/api/schedule?country=${encodeURIComponent(state.discCountry)}`);
+    const sched = $("#sched");
+    if (!sched) return;
+    sched.innerHTML = j.listings.filter((r) => r.show).length
+      ? j.listings.filter((r) => r.show).slice(0, 80).map((r) => `
+        <div class="sr listing" data-action="open" data-id="${r.show_id}" title="Open ${esc(r.show)}">
+          <img src="${esc(r.image || "data:,")}" loading="lazy" onerror="this.remove()">
+          <div class="d"><b>${esc(r.show)}</b>
+            <span>${esc(r.network || "—")}${r.number ? ` · S${String(r.season).padStart(2, "0")}E${String(r.number).padStart(2, "0")}` : ""}</span></div>
+          <span class="rt">${esc(r.time || "")}</span>
+        </div>`).join("")
+      : `<div class="empty" style="padding:16px"><span class="e">📼</span>No broadcast listings returned for ${esc(j.country || state.discCountry)} today. Try another region.</div>`;
+  } catch {
+    const sched = $("#sched");
+    if (sched) sched.innerHTML = `<div class="empty" style="padding:16px"><span class="e">📡</span>Schedule hiccupped. Try again.</div>`;
+  }
 }
 
-/* ── export ──────────────────────────────────────────── */
-async function renderExport(punch) {
+/* ── profile (stats on top · your data + settings below, TV Time style) ── */
+async function renderProfile(punch) {
+  punch(`
+    <h1 class="h-view">Profile</h1>
+    <p class="h-sub">stats · your data · settings</p>
+    <div class="sk skrow"></div><div class="sk skrow"></div>
+  `);
+  const j = await ensureFollows();
+  const shows = j.shows;
+  const watched = shows.reduce((n, s) => n + (s.watched || 0), 0);
+  const epsAll = shows.reduce((n, s) => n + (s.ep_total || 0), 0);
+  const pctAll = epsAll ? Math.min(100, Math.round((watched * 100) / epsAll)) : 0;
+  const mins = watched * 45; // TV Time-style estimate, ~45 min per episode
+  const h = Math.floor(mins / 60), m = mins % 60;
+
+  const badges = [
+    { e: "🌱", t: "First follow", ok: shows.length >= 1 },
+    { e: "1️⃣", t: "Episode one", ok: watched >= 1 },
+    { e: "🔟", t: "Ten club", ok: watched >= 10 },
+    { e: "🏆", t: "Fifty club", ok: watched >= 50 },
+    { e: "🌗", t: "Halfway hero", ok: shows.some((s) => s.ep_total > 0 && s.watched * 2 >= s.ep_total) },
+    { e: "🏁", t: "Series finisher", ok: shows.some((s) => s.ep_total > 0 && s.watched >= s.ep_total) },
+  ].map((b) => `<span class="badge ${b.ok ? "" : "off"}">${b.e}${b.t}</span>`).join("");
+
   const ics = `${location.origin}/calendar.ics?deviceId=${deviceId}`;
   punch(`
-    <h1 class="h-view">Export</h1>
-    <p class="h-sub">your data leaves any time you say so — the brand promise</p>
+    <h1 class="h-view">Profile</h1>
+    <p class="h-sub">stats · your data · settings</p>
+    <div class="pcard">
+      <span class="avatar big"><span>${esc(avLetter())}</span></span>
+      <div style="min-width:0">
+        <b>Your watch history, one device</b>
+        <span class="mono" style="font-size:10px;color:var(--fg-faint)">${esc(deviceId.slice(0, 12))}… · local · wk1</span>
+      </div>
+    </div>
+    <div class="pstat">
+      <div class="st hl"><i class="k">TV TIME (EST)</i><b>${h ? h + " h " : ""}${m} m</b><span>${watched} episode${watched === 1 ? "" : "s"} counted at ~45 min</span></div>
+      <div class="st"><i class="k">EPISODES</i><b>${watched}</b><span>of ${epsAll} aired</span></div>
+      <div class="st"><i class="k">SHOWS</i><b>${shows.length}</b><span>on your watch list</span></div>
+      <div class="st"><i class="k">COMPLETE</i><b>${pctAll}%</b><span>cumulative</span></div>
+    </div>
+    <div class="sectT">BADGES</div>
+    <div class="badges">${badges}</div>
+    <div class="sectT">YOUR DATA</div>
     <div class="card exportcard">
       <div class="h-sub" style="margin-bottom:2px">CALENDAR FEED (ICS)</div>
       <p class="note">Subscribes in Google Calendar (“From URL”), Apple Calendar, Outlook, anything. Auto-refreshes: past 7 days → next 180 days of airtimes.</p>
@@ -362,8 +433,14 @@ async function renderExport(punch) {
       <p class="note">Shows, watch state with timestamps. Human-readable, machine-loadable — the anti-lock-in file.</p>
       <a class="btn primary" href="/export.json?deviceId=${encodeURIComponent(deviceId)}" download>Download seasonbook.json</a>
     </div>
-    <p class="note" style="text-align:center;margin-top:14px">CSV + one-click TV Time GDPR import arrive with accounts (weekend 3). Schedule data by <a href="https://www.tvmaze.com/" target="_blank" rel="noopener">TVmaze</a>.</p>
+    <p class="note" style="text-align:center;margin-top:14px">Accounts, TV Time GDPR import and airtime alerts arrive with weekend 3 — the export above never goes away. Schedule data by <a href="https://www.tvmaze.com/" target="_blank" rel="noopener">TVmaze</a>.</p>
   `);
+}
+
+function avLetter() {
+  let sum = 0;
+  for (const ch of deviceId) sum = (sum + ch.charCodeAt(0)) % 26;
+  return "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[sum];
 }
 
 /* ── interactions (event delegation) ─────────────────── */
@@ -380,6 +457,10 @@ $("#view").addEventListener("click", async (e) => {
     state.posterMode = t.dataset.v;
     localStorage.setItem("sb_post", t.dataset.v);
     render();
+  } else if (a === "disc-country") {
+    state.discCountry = t.dataset.v;
+    localStorage.setItem("sb_disc", t.dataset.v);
+    render();
   } else if (a === "open") {
     location.hash = `#show/${t.dataset.id}`;
   } else if (a === "toggle-reveal") {
@@ -395,19 +476,19 @@ $("#view").addEventListener("click", async (e) => {
     e.preventDefault();
     const on = t.dataset.on === "1";
     if (on) {
-      if (!confirm("Remove this show from your shelf?")) return;
+      if (!confirm("Remove this show from your watch list?")) return;
       t.textContent = "…";
       await post("/api/follow", { deviceId, showId: Number(t.dataset.id), action: "remove" });
       state.follows = null;
       t.textContent = "+ Follow"; t.dataset.on = "0"; t.classList.add("primary");
-      toast("Removed from shelf");
+      toast("Removed from watch list");
     } else {
       t.textContent = "Syncing…"; t.disabled = true;
       try {
         await post("/api/follow", { deviceId, showId: Number(t.dataset.id), action: "add" });
         state.follows = null;
-        t.textContent = "✓ On shelf"; t.dataset.on = "1"; t.disabled = false; t.classList.remove("primary");
-        toast("On the shelf — tonight updates automatically");
+        t.textContent = "✓ On list"; t.dataset.on = "1"; t.disabled = false; t.classList.remove("primary");
+        toast("On your watch list — airtimes light up in Shows");
       } catch { t.textContent = "+ Follow"; t.disabled = false; }
     }
   } else if (a === "copy-ics") {
@@ -431,7 +512,7 @@ async function toggleWatch(btn) {
   try {
     await post("/api/watched", { deviceId, episodeId: epId, state: was ? "remove" : "add" });
     state.follows = null; // progress changed
-    if (!was) toast("Marked watched — more of the shelf lights up");
+    if (!was) toast("Marked watched — more of the watch list lights up");
   } catch {
     btn.classList.toggle("done", was);
     btn.dataset.watched = was ? "1" : "0";
@@ -448,4 +529,13 @@ setInterval(() => {
 }, 15000);
 
 window.addEventListener("hashchange", render);
+
+// topbar: bell lives outside #view, so it gets its own listener
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-action='alerts']")) {
+    toast("Airtime alerts arrive with accounts (weekend 3)");
+  }
+});
+
+$("#avletter").textContent = avLetter();
 render();

@@ -1,4 +1,4 @@
-import { searchShows, fetchShow, fetchEpisodes, compactShow } from "./tvmaze.js";
+import { searchShows, fetchShow, fetchEpisodes, fetchSchedule, compactShow } from "./tvmaze.js";
 import { buildICS } from "./ics.js";
 
 const SYNC_TTL_MS = 12 * 60 * 60 * 1000; // TVmaze fair-use friendly cache window
@@ -49,6 +49,7 @@ async function route(request, env, method, pathname, sp) {
     const showMatch = pathname.match(/^\/api\/shows\/(\d+)$/);
     if (showMatch) return getShow(env, Number(showMatch[1]));
     if (pathname === "/api/tonight") return tonight(env, sp);
+    if (pathname === "/api/schedule") return scheduleRoute(sp);
     if (pathname === "/api/follows") return listFollows(env, sp);
     if (pathname === "/calendar.ics") return calendarFeed(env, sp);
     if (pathname === "/export.json") return exportRoute(env, sp);
@@ -76,6 +77,7 @@ function apiDocs() {
       "POST /api/follow": "{ deviceId, showId, action: 'add' or 'remove' }",
       "GET /api/follows?deviceId=": "your shelf",
       "GET /api/tonight?deviceId=&window=24&from=ISO": "upcoming episodes (UTC window)",
+      "GET /api/schedule?country=US": "today's broadcast-TV listings per country (Discover tab)",
       "POST /api/sync": "{ ids: [..], force? } or { all: true }",
       "GET /calendar.ics?deviceId=&past_days=7&future_days=180": "calendar feed",
       "GET /api/shows/:id/episodes?deviceId=": "episode list with per-device watched flags",
@@ -150,6 +152,29 @@ async function listFollows(env, sp) {
      WHERE f.device_id = ?1 ORDER BY f.created_at DESC`
   ).bind(deviceId).all();
   return json({ count: results.length, shows: results });
+}
+
+// Discover tab: today's broadcast-TV listings for one country — pure passthrough, no DB.
+async function scheduleRoute(sp) {
+  const country = (sp.get("country") || "US").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country)) return json({ error: "country must be ISO-3166 alpha-2, e.g. US, GB, IN" }, 400);
+  const schedule = await fetchSchedule(country);
+  const listings = schedule.slice(0, 240).map((r) => ({
+    episode_id: r.id,
+    show_id: r.show?.id ?? null,
+    show: r.show?.name ?? null,
+    network: r.show?.network?.name || r.show?.webChannel?.name || null,
+    time: r.airtime || r.airdate || "",
+    season: r.season,
+    number: r.number,
+    image: r.show?.image?.medium || r.show?.image?.original || null,
+  }));
+  return json({
+    country,
+    date: schedule[0]?.airdate || null,
+    count: listings.length,
+    listings,
+  });
 }
 
 async function tonight(env, sp) {
