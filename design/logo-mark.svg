@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Seasonbook primary mark: the Spine + Ribbon.
+       A dark book-end slab (the shelf at night) with an ember bookmark ribbon
+       standing proud of the top edge — the show you stopped on. -->
+  <defs>
+    <linearGradient id="sbSlab" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1E2532"/>
+      <stop offset="1" stop-color="#10141C"/>
+    </linearGradient>
+    <linearGradient id="sbRibbon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD37E"/>
+      <stop offset="1" stop-color="#D98A2B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- spine slab, leaning like a book -->
+  <rect x="36" y="52" width="184" height="160" rx="20" fill="url(#sbSlab)"/>
+  <rect x="36" y="52" width="184" height="160" rx="20" fill="none" stroke="#2E3848" stroke-width="3"/>
+
+  <!-- three faint page lines (seasons) -->
+  <line x1="72" y1="98" x2="184" y2="98" stroke="#2E3848" stroke-width="8" stroke-linecap="round"/>
+  <line x1="72" y1="128" x2="184" y2="128" stroke="#2E3848" stroke-width="8" stroke-linecap="round"/>
+  <line x1="72" y1="158" x2="184" y2="158" stroke="#2E3848" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- ember bookmark ribbon with notch -->
+  <path d="M118 12 H150 V86 L134 70 L118 86 Z" fill="url(#sbRibbon)"/>
+</svg>

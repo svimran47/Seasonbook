@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seasonbook · Design System v0.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink-950:#0A0D13;--ink-900:#10141C;--ink-800:#161B25;--ink-700:#1E2532;--ink-600:#2A3342;
+  --line-1:#232B38;--line-2:#2E3848;
+  --paper-50:#F7F3EA;--paper-100:#EFE9DC;--paper-300:#C9C2B2;--paper-500:#8A8677;
+  --fg:#E9ECF3;--fg-dim:#9BA3B4;--fg-faint:#6D7686;
+  --ember-300:#FFD37E;--ember-400:#FFBE5C;--ember-500:#F5A93F;--ember-600:#D98A2B;--ember-700:#A5641D;
+  --sky-400:#6EA8FF;--sky-500:#4285F4;--leaf-400:#4ADE80;--leaf-600:#16A34A;
+  --rose-400:#FB7185;--rose-600:#E11D48;--violet-400:#A78BFA;
+  --fd:"Fraunces",Georgia,serif;--fu:"Inter",system-ui,sans-serif;--fm:"JetBrains Mono",ui-monospace,monospace;
+  --rs:8px;--rm:12px;--rl:16px;--rx:24px;
+  --eo:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--ink-950);color:var(--fg);font-family:var(--fu);line-height:1.55;padding-bottom:80px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+h1,h2,h3{font-family:var(--fd);font-weight:600;letter-spacing:-.01em}
+a{color:var(--sky-400);text-decoration:none}
+section{padding:56px 0;border-top:1px solid var(--line-1)}
+.kicker{color:var(--ember-400);font-family:var(--fm);font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px}
+.lead{color:var(--fg-dim);max-width:640px;margin-top:8px}
+.grid{display:grid;gap:14px}
+.note{color:var(--fg-faint);font-size:12px}
+.dim{color:var(--fg-dim)}
+
+/* hero */
+.hero{padding:72px 0 48px;display:flex;gap:36px;align-items:center;flex-wrap:wrap}
+.hero svg.mark{width:132px;height:132px;flex:none}
+.wm{font-family:var(--fd);font-weight:700;font-size:52px;letter-spacing:-.02em}
+.wm span{color:var(--ember-400)}
+.tagline{color:var(--fg-dim);font-size:18px;margin:6px 0 18px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line-2);border-radius:999px;padding:5px 13px;font-size:13px;color:var(--fg-dim);background:var(--ink-900)}
+.chip b{color:var(--fg);font-weight:600}
+
+/* principle cards */
+.cards4{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.pcard{background:var(--ink-900);border:1px solid var(--line-1);border-radius:var(--rl);padding:20px}
+.pcard .ic{font-size:24px}
+.pcard h3{font-size:17px;margin:10px 0 6px}
+.pcard p{color:var(--fg-dim);font-size:13.5px}
+.pcard .why{display:block;margin-top:12px;font-size:11.5px;color:var(--fg-faint);border-top:1px dashed var(--line-1);padding-top:10px}
+
+/* voice */
+.voice{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.voice{grid-template-columns:1fr}}
+.vbox{background:var(--ink-900);border:1px solid var(--line-1);border-radius:var(--rl);padding:18px 20px}
+.vbox h3{font-size:15px;margin-bottom:12px}
+.vrow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-top:1px dashed var(--line-1);font-size:13.5px}
+.vrow .m{font-family:var(--fm);font-size:11px;flex:none;width:34px}
+.yes .m{color:var(--leaf-400)}.no .m{color:var(--rose-400)}
+
+/* logo concepts */
+.logos{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.lcard{background:var(--ink-900);border:1px solid var(--line-1);border-radius:var(--rl);padding:22px;text-align:center}
+.lcard svg{width:112px;height:112px}
+.lcard h3{font-size:15px;margin:14px 0 4px}
+.lcard p{color:var(--fg-dim);font-size:12.5px}
+
+/* palette */
+.sw{border:1px solid var(--line-1);border-radius:var(--rm);overflow:hidden;background:var(--ink-900)}
+.sw .c{height:56px}
+.sw .t{padding:10px 12px}
+.sw .n{font-size:13px;font-weight:600}
+.sw .h{font-family:var(--fm);font-size:11.5px;color:var(--fg-faint)}
+.sw .u{font-size:11px;color:var(--fg-dim);margin-top:3px}
+.pal1{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+
+/* type */
+.type{background:var(--ink-900);border:1px solid var(--line-1);border-radius:var(--rl);padding:26px}
+.trow{display:flex;align-items:baseline;gap:18px;padding:10px 0;border-top:1px dashed var(--line-1)}
+.trow:first-of-type{border-top:0}
+.trow .spec{font-family:var(--fm);font-size:11px;color:var(--fg-faint);width:150px;flex:none}
+.t-44{font-family:var(--fd);font-size:44px;font-weight:600;letter-spacing:-.02em}
+.t-22{font-family:var(--fd);font-size:22px;font-weight:600}
+.t-16{font-size:16px}
+.t-13{font-size:13px;color:var(--fg-dim)}
+.t-14m{font-family:var(--fm);font-size:14px;color:var(--ember-400)}
+
+/* shelf — signature */
+.shelfdemo{background:var(--ink-800);border:1px solid var(--line-1);border-radius:var(--rl);padding:22px}
+.spines{display:flex;gap:6px;align-items:flex-end;height:230px;overflow:hidden;padding-top:30px}
+.spine{width:40px;height:200px;border-radius:6px 6px 3px 3px;position:relative;display:flex;align-items:flex-end;justify-content:center}
+.spine .st{writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--fd);font-size:12px;color:rgba(255,255,255,.92);padding-bottom:12px;white-space:nowrap}
+.spine .sb{position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);width:30px;height:12px;font-family:var(--fm);font-size:8px;color:rgba(255,255,255,.55);text-align:center}
+.ribbon{position:absolute;top:-26px;left:50%;transform:translateX(-50%);width:12px;height:30px}
+.ribbon svg{width:12px;height:30px;display:block}
+.posterrow{display:flex;gap:10px;overflow:hidden}
+.poster{width:104px;height:156px;border-radius:8px;display:flex;flex-direction:column;justify-content:flex-end;padding:8px;flex:none}
+.poster .pt{font-family:var(--fd);font-size:11px;line-height:1.2;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.poster .pb{height:3px;border-radius:2px;background:rgba(255,255,255,.22);margin-top:6px}
+.poster .pb i{display:block;height:100%;border-radius:2px;background:var(--ember-500)}
+.cap{display:flex;justify-content:space-between;margin-top:14px;font-size:12px;color:var(--fg-faint)}
+
+/* phones */
+.phones{display:flex;gap:24px;justify-content:center;flex-wrap:wrap}
+.phone{width:280px;height:592px;border-radius:42px;border:7px solid var(--ink-600);background:var(--ink-950);overflow:hidden;position:relative;flex:none;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.screen{height:100%;overflow:hidden;display:flex;flex-direction:column;padding:16px 14px 12px}
+.scrhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.h-date{font-family:var(--fd);font-size:16px;font-weight:600}
+.h-sub{font-size:10px;color:var(--fg-faint);font-family:var(--fm)}
+.tl{display:flex;flex-direction:column;gap:8px}
+.ev{display:flex;gap:9px;align-items:center;background:var(--ink-900);border:1px solid var(--line-1);border-radius:12px;padding:9px 10px}
+.ev .t{font-family:var(--fm);font-size:10.5px;color:var(--fg-dim);width:46px;flex:none}
+.ev .dot{width:6px;height:6px;border-radius:50%;flex:none}
+.ev .d{min-width:0}
+.ev .d b{display:block;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .d span{font-size:9.5px;color:var(--fg-faint)}
+.ev.live{border-color:var(--rose-600)}
+.pulse{animation:pu 1.6s infinite}
+@keyframes pu{0%,100%{box-shadow:0 0 0 0 rgba(251,113,133,.5)}50%{box-shadow:0 0 0 5px rgba(251,113,133,0)}}
+.phil{flex:none;margin-top:auto;text-align:center}
+.phil .cn{font-family:var(--fm);font-size:20px;color:var(--ember-400)}
+.phil .cl{font-size:9.5px;color:var(--fg-faint)}
+.navbar{display:flex;justify-content:space-around;border-top:1px solid var(--line-1);padding-top:9px;margin-top:10px}
+.nb{font-size:9px;color:var(--fg-faint);text-align:center}
+.nb.on{color:var(--ember-400)}
+.nb span{display:block;font-size:13px;margin-bottom:2px}
+
+/* show screen */
+.sh0{font-family:var(--fd);font-size:19px;font-weight:700;margin-bottom:2px}
+.shnet{font-size:10px;color:var(--fg-faint);margin-bottom:10px}
+.next{background:linear-gradient(135deg,var(--ink-800),var(--ink-700));border:1px solid var(--ember-700);border-radius:14px;padding:12px}
+.next .k{font-family:var(--fm);font-size:9px;color:var(--ember-400);letter-spacing:.1em}
+.next b{font-family:var(--fd);font-size:15px;display:block;margin:3px 0 2px}
+.next .cnt{font-family:var(--fm);font-size:12px;color:var(--fg-dim)}
+.ladder{display:flex;gap:5px;margin:12px 0 4px}
+.seg{flex:1;height:4px;border-radius:2px;background:var(--ink-700)}
+.seg.done{background:var(--ember-500)}
+.seg.part{background:linear-gradient(90deg,var(--ember-500) 55%,var(--ink-700) 55%)}
+.ladlbl{display:flex;justify-content:space-between;font-size:8.5px;color:var(--fg-faint);font-family:var(--fm);margin-bottom:10px}
+.spoil{position:relative;border:1px solid var(--line-1);border-radius:12px;padding:10px;background:var(--ink-900)}
+.spoil .body{filter:blur(4px);user-select:none}
+.spoil .lock{position:absolute;inset:0;display:flex;gap:6px;align-items:center;justify-content:center;font-size:10px;color:var(--fg-dim)}
+.spoil .lock b{color:var(--rose-400)}
+
+/* widget mockup */
+.widget{background:linear-gradient(160deg,#12161F,#0C0F15);border:1px solid var(--line-2);border-radius:22px;padding:14px}
+.widget .wh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.widget .wh b{font-size:12px}
+.widget .wh span{font-family:var(--fm);font-size:9px;color:var(--ember-400)}
+.we{display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px dashed var(--line-1)}
+.we .t{font-family:var(--fm);font-size:9.5px;color:var(--fg-dim);width:38px}
+.we b{font-size:10.5px}
+.we span{font-size:8.5px;color:var(--fg-faint);display:block}
+
+/* components */
+.comp{background:var(--ink-900);border:1px solid var(--line-1);border-radius:var(--rl);padding:20px}
+.clabel{font-family:var(--fm);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-faint);margin-bottom:12px}
+.btn{border:0;border-radius:10px;padding:10px 18px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:var(--fu)}
+.btn.primary{background:var(--ember-500);color:#241505}
+.btn.primary:hover{background:var(--ember-400)}
+.btn.quiet{background:var(--ink-800);color:var(--fg);border:1px solid var(--line-2)}
+.btn.danger-quiet{background:transparent;color:var(--rose-400);border:1px solid rgba(251,113,133,.35)}
+.schips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.tag{border:1px solid var(--line-2);border-radius:8px;padding:4px 10px;font-size:12px;color:var(--fg-dim);background:var(--ink-800)}
+.tag.ember{color:var(--ember-400);border-color:var(--ember-700)}
+.tag.leaf{color:var(--leaf-400);border-color:rgba(74,222,128,.35)}
+.tag.rose{color:var(--rose-400);border-color:rgba(251,113,133,.35)}
+.notif{background:var(--ink-800);border:1px solid var(--line-2);border-radius:14px;padding:12px;display:flex;gap:11px;max-width:460px}
+.notif .ic{width:34px;height:34px;flex:none}
+.notif b{font-size:13px;display:block}
+.notif .nb2{font-size:12px;color:var(--fg-dim)}
+.notif .acts{margin-top:8px;display:flex;gap:14px;font-size:12px}
+.notif .acts a{color:var(--sky-400);font-weight:600}
+.empty{border:1px dashed var(--line-2);border-radius:var(--rl);padding:26px;text-align:center;color:var(--fg-dim);font-size:13px}
+.empty .e{font-size:26px;margin-bottom:8px}
+.export{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* motion */
+.mo{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.mcard{background:var(--ink-900);border:1px solid var(--line-1);border-radius:var(--rl);padding:18px}
+.mcard h3{font-size:14px;margin-bottom:6px}
+.mcard p{font-size:12.5px;color:var(--fg-dim)}
+
+/* system diagram */
+.flow{display:flex;flex-direction:column;gap:12px}
+.frow{display:flex;gap:12px;align-items:stretch;justify-content:center;flex-wrap:wrap}
+.fbox{background:var(--ink-900);border:1px solid var(--line-2);border-radius:var(--rm);padding:12px 16px;text-align:center;min-width:150px}
+.fbox b{font-size:13px;display:block}
+.fbox span{font-size:11px;color:var(--fg-faint)}
+.farrow{display:flex;align-items:center;color:var(--ember-400);font-size:18px;font-family:var(--fm)}
+.quad{width:100%;border-collapse:collapse;font-size:13px;background:var(--ink-900);border-radius:var(--rm);overflow:hidden}
+.quad th,.quad td{border:1px solid var(--line-1);padding:9px 12px;text-align:center}
+.quad th{background:var(--ink-800);font-size:12px;color:var(--fg-dim)}
+.quad td.ok{color:var(--leaf-400);font-weight:600}
+.quad td.no{color:var(--fg-faint)}
+.quad .rowname{text-align:left;font-weight:600;color:var(--fg)}
+
+/* tokens block */
+pre{background:var(--ink-900);border:1px solid var(--line-1);border-radius:var(--rl);padding:20px;overflow:auto;font-family:var(--fm);font-size:12px;line-height:1.6;color:var(--paper-300)}
+pre .c{color:var(--fg-faint)}
+footer{border-top:1px solid var(--line-1);margin-top:30px;padding:26px 0 0;text-align:center;color:var(--fg-faint);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ═══════════ HERO ═══════════ -->
+<header class="hero">
+  <svg class="mark" viewBox="0 0 256 256" aria-label="Seasonbook mark">
+    <defs>
+      <linearGradient id="hSlab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E2532"/><stop offset="1" stop-color="#10141C"/></linearGradient>
+      <linearGradient id="hRib" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD37E"/><stop offset="1" stop-color="#D98A2B"/></linearGradient>
+    </defs>
+    <rect x="36" y="52" width="184" height="160" rx="20" fill="url(#hSlab)"/>
+    <rect x="36" y="52" width="184" height="160" rx="20" fill="none" stroke="#2E3848" stroke-width="3"/>
+    <line x1="72" y1="98" x2="184" y2="98" stroke="#2E3848" stroke-width="8" stroke-linecap="round"/>
+    <line x1="72" y1="128" x2="184" y2="128" stroke="#2E3848" stroke-width="8" stroke-linecap="round"/>
+    <line x1="72" y1="158" x2="184" y2="158" stroke="#2E3848" stroke-width="8" stroke-linecap="round"/>
+    <path d="M118 12 H150 V86 L134 70 L118 86 Z" fill="url(#hRib)"/>
+  </svg>
+  <div>
+    <div class="wm">season<span>book</span></div>
+    <p class="tagline">A book for every season. Never lose your place again.</p>
+    <div class="chips">
+      <span class="chip"><b>Notifications</b> that arrive</span>
+      <span class="chip"><b>Export</b> forever</span>
+      <span class="chip"><b>Spoiler-safe</b> by default</span>
+      <span class="chip"><b>No ads,</b> ever</span>
+      <span class="chip"><b>TV Time</b> import</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════ PRINCIPLES ═══════════ -->
+<section style="border-top:0;padding-top:8px">
+  <p class="kicker">Four design laws</p>
+  <div class="grid cards4">
+    <div class="pcard"><span class="ic">🔖</span><h3>The shelf is yours</h3>
+      <p>Your history lives as files first, database second. Export is a feature, not a goodbye gift — ICS, JSON, CSV, one tap, from day one.</p>
+      <span class="why">why: TV Time deleted every account on shutdown day. Export = the brand.</span></div>
+    <div class="pcard"><span class="ic">🙈</span><h3>Spoiler-safe by default</h3>
+      <p>Stills, synopses, ratings and guest cast blur until you mark the episode watched. No feed reveal can sting you.</p>
+      <span class="why">why: TV Time's no-spoiler episode comments were its soul; only 2 of 75 clones kept it.</span></div>
+    <div class="pcard"><span class="ic">🔔</span><h3>Notifications that arrive</h3>
+      <p>Per-show FCM topics + device-side rescheduling. Episodes notify on time even when the app was killed — with quiet-hours respect and a daily digest option.</p>
+      <span class="why">why: refugees' #1 complaint; scores apps bury it under gambling ads.</span></div>
+    <div class="pcard"><span class="ic">🕯</span><h3>No ads, ever</h3>
+      <p>Free core, small fair price at the top. No interstitials, no gambling, no "offers". The interface stays a library, not a slot machine.</p>
+      <span class="why">why: the missing quadrant — 74/75 clones are free with no revenue plan at all.</span></div>
+  </div>
+</section>
+
+<!-- ═══════════ VOICE ═══════════ -->
+<section>
+  <p class="kicker">Voice</p>
+  <h2>Sound like a librarian, not a barker</h2>
+  <p class="lead">TV Time-era users were trained by app marketers to expect confetti. We go the other way: precise, warm, boring in the best sense. Concrete numbers over adjectives.</p>
+  <div class="voice" style="margin-top:22px">
+    <div class="vbox">
+      <h3>Notifications & copy — write like this</h3>
+      <div class="vrow yes"><span class="m">✓</span><span>The Quiet Coast — S02E07 "Hollow Bloom" starts in 20 min on Aurora+</span></div>
+      <div class="vrow yes"><span class="m">✓</span><span>Foundry is back Thursday: 3 new episodes this week</span></div>
+      <div class="vrow yes"><span class="m">✓</span><span>Tonight: 4 of your shows air, starting 21:00</span></div>
+    </div>
+    <div class="vbox">
+      <h3>…never like this</h3>
+      <div class="vrow no"><span class="m">✗</span><span>🔥 It's FINALLY here!! Grand finale BINGE MODE is ON — tap tap tap</span></div>
+      <div class="vrow no"><span class="m">✗</span><span>You won't BELIEVE what episode 7… tap to keep watching</span></div>
+      <div class="vrow no"><span class="m">✗</span><span>🎁 LIMITED OFFER: 3 days of premium streaks remaining</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ LOGO ═══════════ -->
+<section>
+  <p class="kicker">Identity</p>
+  <h2>Three mark directions</h2>
+  <p class="lead">The metaphor is a <b>bookend on a night shelf</b>: dark slab, ember ribbon marking where you stopped. All three are self-drawn (no stock, no trademark tangles). Files live in <code>/design/logo-mark.svg</code>.</p>
+  <div class="grid logos" style="margin-top:22px">
+    <div class="lcard">
+      <svg viewBox="0 0 256 256"><defs><linearGradient id="l1s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E2532"/><stop offset="1" stop-color="#10141C"/></linearGradient><linearGradient id="l1r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD37E"/><stop offset="1" stop-color="#D98A2B"/></linearGradient></defs>
+        <rect x="36" y="52" width="184" height="160" rx="20" fill="url(#l1s)"/><rect x="36" y="52" width="184" height="160" rx="20" fill="none" stroke="#2E3848" stroke-width="3"/>
+        <line x1="72" y1="98" x2="184" y2="98" stroke="#2E3848" stroke-width="8" stroke-linecap="round"/><line x1="72" y1="128" x2="184" y2="128" stroke="#2E3848" stroke-width="8" stroke-linecap="round"/><line x1="72" y1="158" x2="184" y2="158" stroke="#2E3848" stroke-width="8" stroke-linecap="round"/>
+        <path d="M118 12 H150 V86 L134 70 L118 86 Z" fill="url(#l1r)"/></svg>
+      <h3>A · The Ribbon (primary)</h3>
+      <p>Works at 16 px (favicon) and at billboard size. The ribbon is the product promise: your place, held.</p>
+    </div>
+    <div class="lcard">
+      <svg viewBox="0 0 256 256"><defs><linearGradient id="l2r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD37E"/><stop offset="1" stop-color="#D98A2B"/></linearGradient></defs>
+        <text x="128" y="150" text-anchor="middle" font-family="Fraunces,Georgia,serif" font-size="120" font-weight="700" fill="#E9ECF3">Sb</text>
+        <path d="M148 196 L166 236 L157 221 L148 236 Z" fill="url(#l2r)" transform="rotate(90 157 216)"/>
+        <path d="M196 60 H216 V120 L206 108 L196 120 Z" fill="url(#l2r)"/></svg>
+      <h3>B · Monogram (compact)</h3>
+      <p>For avatars, badges, notification channels. Ribbon keeps the accent in every size.</p>
+    </div>
+    <div class="lcard">
+      <svg viewBox="0 0 256 256"><defs><linearGradient id="l3r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD37E"/><stop offset="1" stop-color="#D98A2B"/></linearGradient></defs>
+        <rect x="34" y="40" width="44" height="176" rx="10" fill="#1E2532"/><rect x="82" y="40" width="44" height="176" rx="10" fill="#161B25"/><rect x="130" y="40" width="44" height="176" rx="10" fill="#232B38"/>
+        <path d="M148 18 H170 V96 L159 82 L148 96 Z" fill="url(#l3r)"/>
+        <circle cx="212" cy="128" r="26" fill="none" stroke="#6EA8FF" stroke-width="6"/><circle cx="212" cy="128" r="6" fill="#6EA8FF"/></svg>
+      <h3>C · The Row (illustrated)</h3>
+      <p>Spines on a shelf + the glowing "on tonight" dot. For splash screens and store headers, not the icon.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ PALETTE ═══════════ -->
+<section>
+  <p class="kicker">Palette</p>
+  <h2>Ink & ember — a library at night</h2>
+  <p class="lead">Dark-first because the product earns its slot at 21:00 on the sofa. Ember is the single loud color (TV Time's yellow progress bar, aged into candle light). One accent per screen, never two.</p>
+  <div class="grid pal1" style="margin-top:22px">
+    <div class="sw"><div class="c" style="background:#0A0D13"></div><div class="t"><div class="n">Ink 950</div><div class="h">#0A0D13</div><div class="u">app background</div></div></div>
+    <div class="sw"><div class="c" style="background:#10141C"></div><div class="t"><div class="n">Ink 900</div><div class="h">#10141C</div><div class="u">cards & panels</div></div></div>
+    <div class="sw"><div class="c" style="background:#161B25"></div><div class="t"><div class="n">Ink 800</div><div class="h">#161B25</div><div class="u">wells, shelves, inputs</div></div></div>
+    <div class="sw"><div class="c" style="background:#F5A93F"></div><div class="t"><div class="n">Ember 500</div><div class="h">#F5A93F</div><div class="u">primary actions · progress bars</div></div></div>
+    <div class="sw"><div class="c" style="background:#FFD37E"></div><div class="t"><div class="n">Ember 300</div><div class="h">#FFD37E</div><div class="u">highlights on ink</div></div></div>
+    <div class="sw"><div class="c" style="background:#6EA8FF"></div><div class="t"><div class="n">Sky 400</div><div class="h">#6EA8FF</div><div class="u">links · where-to-watch</div></div></div>
+    <div class="sw"><div class="c" style="background:#4ADE80"></div><div class="t"><div class="n">Leaf 400</div><div class="h">#4ADE80</div><div class="u">watched · success · export ready</div></div></div>
+    <div class="sw"><div class="c" style="background:#FB7185"></div><div class="t"><div class="n">Rose 400</div><div class="h">#FB7185</div><div class="u">LIVE now · spoiler ribbon</div></div></div>
+    <div class="sw"><div class="c" style="background:#F7F3EA"></div><div class="t"><div class="n">Paper 50</div><div class="h">#F7F3EA</div><div class="u">text on ember, badges — never a background</div></div></div>
+    <div class="sw"><div class="c" style="background:#A78BFA"></div><div class="t"><div class="n">Violet 400</div><div class="h">#A78BFA</div><div class="u">recommendations only</div></div></div>
+  </div>
+</section>
+
+<!-- ═══════════ TYPE ═══════════ -->
+<section>
+  <p class="kicker">Typography</p>
+  <h2>Fraunces · Inter · JetBrains Mono</h2>
+  <p class="lead">Serif for the soul (titles — this is a book, not a scoreboard), Inter for everything functional, mono for anything measured (airtimes, countdowns, badges). All free-license Google Fonts.</p>
+  <div class="type" style="margin-top:22px">
+    <div class="trow"><span class="spec">display / 44 · h1</span><span class="t-44">Never lose your place</span></div>
+    <div class="trow"><span class="spec">display / 22 · h2, show titles</span><span class="t-22">The Quiet Coast — S02E07</span></div>
+    <div class="trow"><span class="spec">ui / 16 · body</span><span class="t-16">Foundry returns Thursday with three new episodes this week.</span></div>
+    <div class="trow"><span class="spec">ui / 13 · meta</span><span class="t-13">Aurora+ · drama · returns Oct 30 · 8 episodes left</span></div>
+    <div class="trow"><span class="spec">data / 14 mono</span><span class="t-14m">in 2h 05m · starts 21:00 · S02E07</span></div>
+  </div>
+</section>
+
+<!-- ═══════════ THE SHELF — signature ═══════════ -->
+<section>
+  <p class="kicker">Signature surface</p>
+  <h2>The Shelf — every other clone shows a poster grid</h2>
+  <p class="lead">Our default view is the one the name promises: your shows standing like books, the one you're mid-way through wearing the ember ribbon and a spine-flip progress marker. Poster view stays one toggle away for refugees who want the muscle memory.</p>
+  <div class="shelfdemo" style="margin-top:22px">
+    <div class="spines">
+      <div class="spine" style="background:linear-gradient(180deg,#3E2C1D,#241A12)"><span class="st">Harvest Road</span><span class="sb">S03</span></div>
+      <div class="spine" style="background:linear-gradient(180deg,#233A4A,#152430)"><span class="st">The Quiet Coast</span><span class="sb">S02</span>
+        <span class="ribbon"><svg viewBox="0 0 12 30"><path d="M0 0 H12 V30 L6 22 L0 30 Z" fill="#FB7185"/></svg></span></div>
+      <div class="spine" style="background:linear-gradient(180deg,#3A2A45,#221930)"><span class="st">Foundry</span><span class="sb">S02</span></div>
+      <div class="spine" style="background:linear-gradient(180deg,#2C3A2A,#1A241A);width:34px"><span class="st">Museum of Small Lives</span><span class="sb">S01</span></div>
+      <div class="spine" style="background:linear-gradient(180deg,#40351E,#26200F)"><span class="st">The Long Dark Hour</span><span class="sb">S01</span>
+        <span class="ribbon"><svg viewBox="0 0 12 30"><path d="M0 0 H12 V30 L6 22 L0 30 Z" fill="#F5A93F"/></svg></span></div>
+      <div class="spine" style="background:linear-gradient(180deg,#2B3445,#181F2B);width:38px"><span class="st">Dead Letters</span><span class="sb">S04</span></div>
+      <div class="spine" style="background:linear-gradient(180deg,#423030,#271717)"><span class="st">Bird & Key</span><span class="sb">S01</span></div>
+    </div>
+    <div class="cap"><span>Shelf view — the ribbon marks where you stopped; finished series stand plain</span><span>pink ribbon: this one airs tonight</span></div>
+  </div>
+  <div class="shelfdemo" style="margin-top:12px">
+    <div class="posterrow">
+      <div class="poster" style="background:linear-gradient(160deg,#4A2F14,#1C1208)"><span class="pt">Harvest Road</span><div class="pb"><i style="width:64%"></i></div></div>
+      <div class="poster" style="background:linear-gradient(160deg,#14344A,#0C1B26)"><span class="pt">The Quiet Coast</span><div class="pb"><i style="width:42%"></i></div></div>
+      <div class="poster" style="background:linear-gradient(160deg,#38224A,#170F24)"><span class="pt">Foundry</span><div class="pb"><i style="width:88%"></i></div></div>
+      <div class="poster" style="background:linear-gradient(160deg,#1E3A17,#0E1A0C)"><span class="pt">Museum of Small Lives</span><div class="pb"><i style="width:12%"></i></div></div>
+      <div class="poster" style="background:linear-gradient(160deg,#4A3A14,#20180A)"><span class="pt">The Long Dark Hour</span><div class="pb"><i style="width:100%;background:var(--leaf-400)"></i></div></div>
+      <div class="poster" style="background:linear-gradient(160deg,#2E3650,#12141F)"><span class="pt">Dead Letters</span><div class="pb"><i style="width:71%"></i></div></div>
+    </div>
+    <div class="cap"><span>Poster view (toggle) — refugees' muscle memory, with TV Time's yellow matured into ember</span><span>green = finished</span></div>
+  </div>
+</section>
+
+<!-- ═══════════ PHONE MOCKUPS ═══════════ -->
+<section>
+  <p class="kicker">The three core screens</p>
+  <h2>Tonight · Shelf · Show</h2>
+  <div class="phones" style="margin-top:26px">
+
+    <div class="phone"><div class="screen">
+      <div class="scrhead"><span class="h-date">Tonight</span><span class="h-sub">TUE 27 OCT · 4 EVENTS</span></div>
+      <div class="tl">
+        <div class="ev live"><span class="dot pulse" style="background:var(--rose-400)"></span><span class="t">20:00</span>
+          <div class="d"><b>The Long Dark Hour</b><span>S01E08 finale · Ice TV · LIVE in 12 min</span></div></div>
+        <div class="ev"><span class="dot" style="background:var(--ember-400)"></span><span class="t">21:00</span>
+          <div class="d"><b>The Quiet Coast</b><span>S02E07 Hollow Bloom · Aurora+</span></div></div>
+        <div class="ev"><span class="dot" style="background:#8A8677"></span><span class="t">22:30</span>
+          <div class="d"><b>Foundry</b><span>S02E11 · Iron TV · double episode</span></div></div>
+        <div class="ev"><span class="dot" style="background:#8A8677"></span><span class="t">23:15</span>
+          <div class="d"><b>Dead Letters</b><span>S04E19 · rerun — set to skip tonight</span></div></div>
+      </div>
+      <div class="phil"><div><div class="cn">2h 05m</div><div class="cl">until your next unwatched episode</div></div></div>
+      <div class="navbar">
+        <div class="nb on"><span>🌙</span>Tonight</div><div class="nb"><span>📚</span>Shelf</div><div class="nb"><span>🔍</span></div><div class="nb"><span>📤</span></div>
+      </div>
+    </div></div>
+
+    <div class="phone"><div class="screen">
+      <div class="scrhead"><span class="h-sub">← shelf</span><span class="h-sub">⋮</span></div>
+      <div class="sh0">Foundry</div>
+      <div class="shnet">Iron TV · drama · S02 returns Oct 30</div>
+      <div class="next">
+        <span class="k">NEXT UP</span>
+        <b>S02E07 — Hollow Bloom</b>
+        <div class="cnt">Thu 30 Oct · 21:30 · in 3d 02h 14m</div>
+      </div>
+      <div class="ladder">
+        <i class="seg done"></i><i class="seg done"></i><i class="seg part"></i><i class="seg"></i><i class="seg"></i><i class="seg"></i><i class="seg"></i>
+      </div>
+      <div class="ladlbl"><span>S1 ✓13</span><span>S2 ●6/8</span><span>3 more</span></div>
+      <div class="spoil">
+        <div class="lock"><span>🔒</span><b>Spoiler-safe</b><span> · mark E07 watched to reveal</span></div>
+        <div class="body"><p style="font-size:11px">With the furnace lit and the town's vote only days away, Reya makes a trade she can't undo. Gustav learns who signed the ledger. Late visitor at the yard gate.</p></div>
+      </div>
+      <div class="navbar">
+        <div class="nb"><span>🌙</span>Tonight</div><div class="nb"><span>📚</span>Shelf</div><div class="nb on"><span>📖</span></div><div class="nb"><span>📤</span>Export</div>
+      </div>
+    </div></div>
+
+    <div class="phone"><div class="screen" style="justify-content:center;padding:14px 10px">
+      <div class="scrhead" style="margin-bottom:4px"><span class="h-sub">HOME · WIDGET v1</span></div>
+      <div class="widget">
+        <div class="wh"><b>📖 Seasonbook</b><span>TONIGHT · 4</span></div>
+        <div class="we" style="border-top:0;padding-top:2px"><span class="t" style="color:var(--rose-400)">20:00</span><div><b>The Long Dark Hour</b><span>live in 12 min</span></div></div>
+        <div class="we"><span class="t">21:00</span><div><b>The Quiet Coast</b><span>S02E07 · Aurora+</span></div></div>
+        <div class="we"><span class="t">22:30</span><div><b>Foundry</b><span>S02E11 · Iron TV</span></div></div>
+        <div class="we"><span class="t">+1</span><div><span style="font-size:10px;color:var(--fg-dim)">1 more on tap →</span></div></div>
+      </div>
+      <div class="phil"><div><div class="cl" style="margin-bottom:8px">same data spine · Glance-based · resizes 4×2 / 4×1</div>
+        <div class="cn" style="font-size:13px">the glance no incumbent gives away free</div></div></div>
+      <div class="navbar"><div class="nb"><span>🌙</span></div><div class="nb"><span>📚</span></div><div class="nb"><span>🔍</span></div><div class="nb on"><span>🧩</span>Widget</div></div>
+    </div></div>
+
+  </div>
+</section>
+
+<!-- ═══════════ COMPONENTS ═══════════ -->
+<section>
+  <p class="kicker">Component kit</p>
+  <h2>Buttons, states, system notifications</h2>
+  <div class="grid cards4" style="margin-top:22px">
+    <div class="comp">
+      <div class="clabel">Actions</div>
+      <button class="btn primary">✓ Mark watched — S02E07</button>
+      <div style="height:8px"></div>
+      <button class="btn quiet">Follow on TVmaze id 169</button>
+      <div style="height:8px"></div>
+      <button class="btn danger-quiet">Remove from shelf</button>
+      <p class="note" style="margin-top:10px">One ember button per screen. Destructive is outlined, never filled.</p>
+    </div>
+    <div class="comp">
+      <div class="clabel">State chips</div>
+      <div class="schips">
+        <span class="tag ember">airs in 20 min</span>
+        <span class="tag leaf">watched ✓</span>
+        <span class="tag rose">spoiler-locked 🔒</span>
+        <span class="tag">on hiatus</span>
+        <span class="tag">ended · 3 seasons</span>
+        <span class="tag">tbd airdate</span>
+      </div>
+      <p class="note" style="margin-top:10px">Chips carry data, never marketing. A chip family is ≤ 6 per screen.</p>
+    </div>
+    <div class="comp">
+      <div class="clabel">System notification (Android)</div>
+      <div class="notif">
+        <svg class="ic" viewBox="0 0 256 256"><rect x="36" y="52" width="184" height="160" rx="20" fill="#161B25"/><path d="M118 12 H150 V86 L134 70 L118 86 Z" fill="#F5A93F"/></svg>
+        <div style="min-width:0">
+          <b>The Quiet Coast · S02E07</b>
+          <div class="nb2">"Hollow Bloom" starts in 20 min on Aurora+</div>
+          <div class="acts"><a>Open</a><a>✓ Watched</a><a>Mute show</a></div>
+        </div>
+      </div>
+      <p class="note" style="margin-top:10px">Title = show + code. Body = one fact + time/minute offset. Actions solve the task inline, like SeriesGuide's reply-from-notification.</p>
+    </div>
+    <div class="comp">
+      <div class="clabel">Empty & export states</div>
+      <div class="empty"><div class="e">🪴</div>Your shelf is empty.<br>Paste your <b>TV Time export</b> or search above.</div>
+      <div class="export" style="margin-top:12px">
+        <button class="btn quiet">📅 calendar.ics</button>
+        <button class="btn quiet">JSON</button>
+        <button class="btn quiet">CSV</button>
+        <span class="note">files always include watch dates</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ MOTION ═══════════ -->
+<section>
+  <p class="kicker">Motion & feel</p>
+  <h2>Four rules, borrowed from paper</h2>
+  <div class="grid mo" style="margin-top:22px">
+    <div class="mcard"><h3>Bookend taps</h3><p>Every number that matters counts up/down: countdowns tick in mono, never jump. 120 ms/240 ms curves only — nothing bounces, nothing celebrates.</p></div>
+    <div class="mcard"><h3>The ribbon drops</h3><p>When you mark an episode watched, a small ember ribbon falls onto the show's spine. One motion per meaning — no confetti systems.</p></div>
+    <div class="mcard"><h3>Page-curl pull-to-refresh</h3><p>Refreshing tonight's data curls like a page corner (Lottie can fake it; CSS skew suffices). It's the only "fun" gesture we ship.</p></div>
+    <div class="mcard"><h3>Silence after 22:00</h3><p>Motion respects quiet hours the same as notifications: no badges, flashes or staggered animations on the digest screen at night.</p></div>
+  </div>
+</section>
+
+<!-- ═══════════ SYSTEM ═══════════ -->
+<section>
+  <p class="kicker">System design</p>
+  <h2>One spine, four consumers</h2>
+  <p class="lead">The design system sits on the weekend-1 worker without a single schema change. D1 is the single brain; every screen (PWA, Android, widget, calendar app) is a dumb, beautiful reader of the same truth.</p>
+  <div class="flow" style="margin-top:24px">
+    <div class="frow">
+      <div class="fbox"><b>TVmaze</b><span>episodes · airtimes (free)</span></div>
+      <div class="fbox"><b>TMDB</b><span>posters · where-to-watch</span></div>
+    </div>
+    <div class="frow"><div class="farrow">↓ ↓ ↓</div></div>
+    <div class="frow">
+      <div class="fbox"><b>Worker API</b><span>search · follow · tonight</span></div>
+      <div class="fbox"><b>D1 cache</b><span>shows · episodes · follows<br>12 h TTL</span></div>
+      <div class="fbox"><b>Cron + diff</b><span>hourly airtimes refresh</span></div>
+    </div>
+    <div class="frow"><div class="farrow">↓</div></div>
+    <div class="frow">
+      <div class="fbox"><b>PWA</b><span>tonight · shelf · export</span></div>
+      <div class="fbox"><b>Android</b><span>FCM topics + WorkManager</span></div>
+      <div class="fbox"><b>Widget (Glance)</b><span>tonight glance</span></div>
+      <div class="fbox"><b>calendar.ics</b><span>any calendar app subscribes</span></div>
+    </div>
+  </div>
+
+  <table class="quad" style="margin-top:30px">
+    <tr><th class="rowname">The missing quadrant (evidence: census, Oct 23)</th><th>TV Time</th><th>Bingers</th><th>ShowMe</th><th>Up Next</th><th>Seasonbook</th></tr>
+    <tr><td class="rowname">Fast, account-optional daily UX</td><td class="no">account required</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ deviceId → real anon</td></tr>
+    <tr><td class="rowname">Reliable airtime notifications</td><td class="no">~ (died with it)</td><td class="ok">claimed</td><td class="no">?</td><td class="ok">local only</td><td class="ok">✓ topics + reschedule (the moat)</td></tr>
+    <tr><td class="rowname">Fair small price + guaranteed export</td><td class="no">no price, no export</td><td class="no">supporter tiers, no export</td><td class="no">free, export</td><td class="no">no export?</td><td class="ok">✓ ICS/JSON/CSV day one</td></tr>
+    <tr><td class="rowname">Spoiler-safe mode</td><td class="ok">✓ (its soul)</td><td class="ok">✓</td><td class="ok">✓</td><td class="no">✗</td><td class="ok">✓ default</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════ TOKENS ═══════════ -->
+<section>
+  <p class="kicker">Tokens</p>
+  <h2>The canonical values live in <code>/design/tokens.css</code></h2>
+  <p class="lead">This page mirrors them inline for portability. Android will consume the same numbers (Compose <code>Color(0xFF0A0D13)</code>-style) — one source of truth, two platforms.</p>
+  <pre style="margin-top:22px"><span class="c">/* surfaces */</span>      --ink-950:#0A0D13   --ink-900:#10141C   --ink-800:#161B25
+<span class="c">/* action */</span>        --ember-500:#F5A93F  (buttons·progress)  --ember-300:#FFD37E (highlight)
+<span class="c">/* signals */</span>       --sky-400:#6EA8FF (links)  --leaf-400:#4ADE80 (watched)  --rose-400:#FB7185 (live·spoiler)
+<span class="c">/* type */</span>          Fraunces (display) · Inter (UI) · JetBrains Mono (data)
+<span class="c">/* motion */</span>        --dur-1:120ms (taps)  --dur-2:240ms (sheets)  --ease-out:cubic-bezier(.22,1,.36,1)
+<span class="c">/* rules */</span>         one ember focal per screen · destructive outlined · blur = unwatched</pre>
+</section>
+
+<footer>
+  Seasonbook design pass v0.1 · weekend 1 · every visual here is hand-written CSS/SVG — no stock, no screenshots, no trademarks.<br>
+  Show names used in mockups are invented. Episode/airtime data: <a href="https://www.tvmaze.com/">TVmaze</a> (attribution kept).
+</footer>
+
+</div>
+</body>
+</html>

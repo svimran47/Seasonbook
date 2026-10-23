@@ -1,0 +1,57 @@
+/* Seasonbook design tokens v0.1 — canonical source.
+   Web: :root tokens consumed by the PWA + design-system page.
+   Android later: same values exported to Compose Thermometer / Material You mapping. */
+
+:root {
+  /* ── Ink (surfaces, dark-first) ───────────────────────────── */
+  --ink-950:#0A0D13;  /* app background */
+  --ink-900:#10141C;  /* raised surface: cards, panels */
+  --ink-800:#161B25;  /* wells: inputs, shelves */
+  --ink-700:#1E2532;  /* pressed states */
+  --ink-600:#2A3342;  /* borders on interactive */
+
+  /* ── Line (hairlines & separators) ────────────────────────── */
+  --line-1:#232B38;
+  --line-2:#2E3848;
+
+  /* ── Paper (warm text-on-ink accents, not for large areas) ── */
+  --paper-50:#F7F3EA;
+  --paper-100:#EFE9DC;
+  --paper-300:#C9C2B2;
+  --paper-500:#8A8677;
+
+  /* ── Text ─────────────────────────────────────────────────── */
+  --fg:#E9ECF3;        /* primary text */
+  --fg-dim:#9BA3B4;    /* secondary */
+  --fg-faint:#6D7686;  /* tertiary, disabled */
+
+  /* ── Ember (primary action — the TV Time yellow bar, matured) ── */
+  --ember-300:#FFD37E;
+  --ember-400:#FFBE5C;
+  --ember-500:#F5A93F; /* buttons, progress bars, focus */
+  --ember-600:#D98A2B; /* pressed */
+  --ember-700:#A5641D; /* on paper */
+
+  /* ── Signals ──────────────────────────────────────────────── */
+  --sky-400:#6EA8FF;   /* links, where-to-watch */
+  --sky-500:#4285F4;
+  --leaf-400:#4ADE80;  /* watched / success */
+  --leaf-600:#16A34A;
+  --rose-400:#FB7185;  /* LIVE now, spoiler-ribbon */
+  --rose-600:#E11D48;
+  --violet-400:#A78BFA;/* rec / discover only */
+
+  /* ── Type ─────────────────────────────────────────────────── */
+  --font-display:"Fraunces",Georgia,'Times New Roman',serif;  /* headings, show titles */
+  --font-ui:"Inter",system-ui,'Segoe UI',Roboto,sans-serif;   /* everything else */
+  --font-data:"JetBrains Mono",ui-monospace,'Cascadia Mono',monospace; /* airtimes, countdowns */
+
+  /* ── Shape & motion ───────────────────────────────────────── */
+  --r-sm:8px;
+  --r-md:12px;
+  --r-lg:16px;
+  --r-xl:24px;
+  --ease-out:cubic-bezier(.22,1,.36,1);
+  --dur-1:120ms;  /* taps, hovers */
+  --dur-2:240ms;  /* covers, sheets */
+}
