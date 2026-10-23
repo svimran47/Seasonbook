@@ -2,6 +2,7 @@
 # Needs the dev server running: `npm run dev` then `npm run smoke`
 $ErrorActionPreference = "Stop"
 $base = "http://localhost:8787"
+if ($env:SB_BASE) { $base = $env:SB_BASE }  # $env:SB_BASE="http://localhost:8789"; npm run smoke — for parallel dev sessions
 
 # 0. wait for the local server (up to ~30s)
 $up = $false

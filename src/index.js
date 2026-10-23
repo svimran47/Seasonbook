@@ -53,7 +53,9 @@ async function route(request, env, method, pathname, sp) {
     if (pathname === "/api/schedule") return scheduleRoute(sp);
     if (pathname === "/api/follows") return listFollows(env, sp);
     if (pathname === "/api/movies/search") return movieSearchRoute(env, sp);
-    if (pathname === "/api/movies/trending") return tmdbRoute(env, () => trendingMovies(env));
+    if (pathname === "/api/movies/trending") {
+      return tmdbRoute(env, () => trendingMovies(env).then((list) => ({ count: list.length, results: list.slice(0, 20) })));
+    }
     const movieMatch = pathname.match(/^\/api\/movies\/(\d+)$/);
     if (movieMatch) return getMovieRoute(env, sp, Number(movieMatch[1]));
     if (pathname === "/api/movies") return moviesRoute(env, sp);
