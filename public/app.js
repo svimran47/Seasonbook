@@ -90,13 +90,16 @@ async function render() {
   const punch = (html) => { if (seq === state.seq) { view.innerHTML = `<div class="enter">${html}</div>`; window.scrollTo(0, 0); } };
 
   // nav active state
-  const section = hash.startsWith("#show/") ? "shows" : hash.replace("#", "");
+  const section = hash.startsWith("#show/") ? "shows" : hash.startsWith("#movie/") ? "movies" : hash.replace("#", "");
   document.querySelectorAll(".bottom a").forEach((a) => a.classList.toggle("on", a.dataset.view === section));
 
   try {
     if (hash.startsWith("#show/")) {
       const id = Number(hash.split("/")[1]);
       await renderShow(id, punch);
+    } else if (hash.startsWith("#movie/")) {
+      const id = Number(hash.split("/")[1]);
+      await renderMovie(id, punch);
     } else if (hash === "#shows") {
       await renderShows(punch);
     } else if (hash === "#movies") {
@@ -303,14 +306,181 @@ async function renderShow(id, punch) {
   `);
 }
 
-/* ── movies (TV Time tab #2 — lands with accounts) ────── */
+function tmdbSetupCard() {
+  return `
+    <div class="card exportcard">
+      <div class="h-sub" style="margin-bottom:2px">SETUP · FREE TMDB KEY</div>
+      <p class="note" style="margin-bottom:10px">The write side of this tab is already live — it needs one free key to light up film data.</p>
+      <ol class="steps">
+        <li>Create a free account at <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">themoviedb.org</a> → Settings → API → “Developer”, copy the key.</li>
+        <li>Local dev: create a <b>.dev.vars</b> file at the project root with <b>TMDB_TOKEN="your-key"</b>, then restart <b>npm run dev</b>.</li>
+        <li>Deployed: <b>wrangler secret put TMDB_TOKEN</b> once per environment.</li>
+      </ol>
+      <p class="note">Your movies already live in the Seasonbook export — the watch state was always yours, the key only feeds posters and titles.</p>
+    </div>
+    <p class="note" style="text-align:center;margin-top:14px">Movie data by <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>.</p>`;
+}
+
 async function renderMovies(punch) {
   punch(`
     <h1 class="h-view">Movies</h1>
-    <p class="h-sub">the watch list gets a second book — films</p>
-    <div class="empty"><span class="e">🎬</span>Film tracking arrives with accounts (weekend 3).<br>
-    Movies get the same rules as shows: watch list, progress, spoiler-safe pages, full export — nothing walled in.</div>
-    <p class="note" style="text-align:center;margin-top:14px">Shows first, then films — the watch-state spine already carries both.</p>
+    <p class="h-sub">your film watch list — same rules as shows</p>
+    <div class="sk skrow"></div><div class="sk skrow"></div><div class="sk skrow"></div>
+  `);
+
+  // Device list (D1-only, works with or without a TMDB key) + trending (key-gated).
+  let mine = { count: 0, movies: [] };
+  let trend = null, setup = false, fail = false;
+  try {
+    const res = await fetch(`/api/movies?deviceId=${deviceId}`);
+    const j = await res.json().catch(() => ({}));
+    if (res.ok) mine = j; else fail = true;
+  } catch { fail = true; }
+  try {
+    const res = await fetch(`/api/movies/trending`);
+    const j = await res.json().catch(() => ({}));
+    if (j.error === "tmdb-token-missing") setup = true;
+    else if (res.ok) trend = j.results || [];
+  } catch { /* trending is optional garnish */ }
+
+  const isUpcoming = (m) => m.release_date && new Date(m.release_date) > new Date();
+  const gridRow = (m) => `
+    <div data-action="open-m" data-id="${m.id}" title="${esc(m.title)}">
+      <div class="poster ${m.state === "watched" ? "finished" : ""}">
+        ${m.poster ? `<img src="${esc(m.poster)}" loading="lazy" onerror="this.remove()">`
+          : `<div style="position:absolute;inset:0;background:${pick(PALETTES, m.id)};display:grid;place-items:center;font-family:Fraunces,serif;font-size:34px;color:rgba(255,255,255,.65)">${esc((m.title || "?")[0])}</div>`}
+        ${m.state === "watched" ? '<span class="fin">✓</span>' : ""}
+        <div class="pb"><i style="width:${m.state === "watched" ? 100 : isUpcoming(m) ? 0 : 25}%"></i></div>
+      </div>
+      <div class="pmeta"><b>${esc(m.title)}</b><span>${m.year || "—"}${isUpcoming(m) ? " · upcoming" : ""}</span></div>
+    </div>`;
+
+  const want = mine.movies.filter((m) => m.state === "want");
+  const watched = mine.movies.filter((m) => m.state === "watched");
+
+  let body;
+  if (want.length || watched.length) {
+    body = `${want.length ? `<div class="sectT">WANT TO WATCH · ${want.length}</div><div class="pgrid">${want.map(gridRow).join("")}</div>` : ""}
+      ${watched.length ? `<div class="sectT" style="margin-top:18px">WATCHED · ${watched.length}</div><div class="pgrid">${watched.map(gridRow).join("")}</div>` : ""}`;
+  } else {
+    body = `<div class="empty"><span class="e">🎬</span>Your film list is empty.<br>${setup ? "Add a TMDB key, then search or pick from trending below." : "Search below or start from this week's trending films."}</div>`;
+  }
+
+  if (fail) {
+    body += `<div class="empty" style="margin-top:14px;padding:16px"><span class="e">📡</span>Movie list hiccupped. <button class="btn" data-action="render-again">Retry</button></div>`;
+  }
+
+  if (setup) {
+    punch(`
+      <h1 class="h-view">Movies</h1>
+      <p class="h-sub">your film watch list — same rules as shows</p>
+      ${body}
+      ${tmdbSetupCard()}
+    `);
+    return;
+  }
+
+  punch(`
+    <h1 class="h-view">Movies</h1>
+    <p class="h-sub">your film watch list — same rules as shows</p>
+    ${body}
+    <div class="sectT">FIND FILMS</div>
+    <div class="searchrow"><input id="mq" placeholder="Try: Interstellar, Parasite, Dune…" autocomplete="off"></div>
+    <div id="msr"></div>
+    ${trend && trend.length ? `
+      <div class="sectT">TRENDING THIS WEEK</div>
+      <div id="trend">${trend.slice(0, 10).map((m) => `
+        <div class="sr listing" data-action="open-m" data-id="${m.id}" title="Open ${esc(m.title)}">
+          <img src="${esc(m.poster || "data:,")}" loading="lazy" onerror="this.remove()">
+          <div class="d"><b>${esc(m.title)}</b><span>${m.year || "—"}${m.runtime ? " · " + m.runtime + " min" : ""}</span></div>
+          <button class="btn" data-action="mstate" data-id="${m.id}" data-v="want" data-title="${esc(m.title)}">+ Want</button>
+        </div>`).join("")}</div>` : `
+      <div class="sectT">TRENDING THIS WEEK</div>
+      <div id="trend" class="note" style="text-align:center;padding:8px 0">no trending data right now.</div>`}
+    <p class="note" style="text-align:center;margin-top:16px">Movie data by <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a></p>
+  `);
+
+  const input = $("#mq");
+  if (input) {
+    let t;
+    input.addEventListener("input", () => {
+      clearTimeout(t);
+      t = setTimeout(() => doMovieSearch(input.value.trim()), 380);
+    });
+    input.focus();
+  }
+
+  async function doMovieSearch(q) {
+    const box = $("#msr");
+    if (!box) return;
+    if (!q) { box.innerHTML = ""; return; }
+    try {
+      const res = await fetch(`/api/movies/search?q=${encodeURIComponent(q)}`);
+      const j = await res.json().catch(() => ({}));
+      if (!box.isConnected) return;
+      const has = new Set(mine.movies.map((x) => x.id));
+      box.innerHTML = res.ok && j.results?.length
+        ? j.results.map((m) => `
+          <div class="sr listing" data-action="open-m" data-id="${m.id}" title="Open ${esc(m.title)}">
+            <img src="${esc(m.poster || "data:,")}" loading="lazy" onerror="this.remove()">
+            <div class="d"><b>${esc(m.title)}</b><span>${m.year || "—"}${m.runtime ? " · " + m.runtime + " min" : ""}</span></div>
+            <button class="btn ${has.has(m.id) ? "" : "primary"}" data-action="mstate" data-id="${m.id}" data-v="want" data-title="${esc(m.title)}">
+              ${has.has(m.id) ? "✓ On list" : "+ Want"}</button>
+          </div>`).join("")
+        : `<div class="empty"><span class="e">🔎</span>Nothing found for “${esc(q)}”</div>`;
+    } catch {
+      box.innerHTML = `<div class="empty"><span class="e">📡</span>Search hiccupped. Try again.</div>`;
+    }
+  }
+}
+
+/* ── movie detail ─────────────────────────────────────── */
+async function renderMovie(id, punch) {
+  punch(`
+    <button class="crumb" onclick="location.hash='#movies'">← movies</button>
+    <div class="sk skrow"></div><div class="sk skrow" style="height:80px"></div><div class="sk skrow"></div>
+  `);
+  let j;
+  try {
+    const res = await fetch(`/api/movies/${id}?deviceId=${deviceId}`);
+    j = await res.json().catch(() => ({}));
+    if (j.error === "tmdb-token-missing") {
+      punch(`
+        <button class="crumb" onclick="location.hash='#movies'">← movies</button>
+        <h1 class="h-view">Movies</h1>
+        <p class="h-sub">setup needed for film pages</p>
+        ${tmdbSetupCard()}`);
+      return;
+    }
+    if (!res.ok) throw new Error("http " + res.status);
+  } catch {
+    punch(`
+      <button class="crumb" onclick="location.hash='#movies'">← movies</button>
+      <div class="empty"><span class="e">🎬</span>Couldn't load that film.<br><button class="btn quiet" onclick="location.reload()">Reload</button></div>`);
+    return;
+  }
+  const m = j.movie;
+  const st = j.state?.state || "";
+  const upcoming = m.release_date && new Date(m.release_date) > new Date();
+  const released = m.status === "Released";
+  punch(`
+    <button class="crumb" onclick="location.hash='#movies'">← movies</button>
+    <div class="mdetail">
+      ${m.poster ? `<img src="${esc(m.poster)}" onerror="this.remove()">` : ""}
+      <div style="min-width:0">
+        <h2>${esc(m.title)}</h2>
+        <div class="meta">${m.year || "—"}${m.runtime ? " · " + m.runtime + " min" : ""}${m.status ? " · " + esc(m.status) : ""}</div>
+        ${released && !upcoming && m.release_date ? `<div class="meta" style="margin-top:4px">released ${esc(m.release_date)}</div>` : ""}
+        ${upcoming ? `<div style="margin-top:8px"><span class="upchip">RELEASES ${esc(m.release_date)}</span></div>` : ""}
+      </div>
+    </div>
+    <div class="macts">
+      <button class="btn ${st === "want" ? "primary" : ""}" data-action="mstate" data-id="${m.id}" data-v="want">${st === "want" ? "✓ On your list" : "＋ Want to watch"}</button>
+      <button class="btn ${st === "watched" ? "primary" : ""}" data-action="mstate" data-id="${m.id}" data-v="watched">${st === "watched" ? "↩ Un-mark" : "✓ Watched"}</button>
+      ${st ? '<button class="btn" data-action="mstate" data-id="' + m.id + '" data-v="remove" title="Track nothing">✕</button>' : ""}
+    </div>
+    ${m.overview ? `<div class="card" style="margin-bottom:14px"><div class="h-sub" style="margin-bottom:4px">OVERVIEW</div><p class="body" style="font-size:13px;color:var(--fg-dim)">${esc(m.overview)}</p></div>` : ""}
+    <p class="note" style="text-align:center;margin-top:14px">Movie data by <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a></p>
   `);
 }
 
@@ -390,7 +560,21 @@ async function renderProfile(punch) {
   const watched = shows.reduce((n, s) => n + (s.watched || 0), 0);
   const epsAll = shows.reduce((n, s) => n + (s.ep_total || 0), 0);
   const pctAll = epsAll ? Math.min(100, Math.round((watched * 100) / epsAll)) : 0;
-  const mins = watched * 45; // TV Time-style estimate, ~45 min per episode
+
+  // movie half of the clock (silently absent when the TMDB tab has no key)
+  let mvWanted = 0, mvWatched = 0, mvMins = 0;
+  try {
+    const res = await fetch(`/api/movies?deviceId=${deviceId}`);
+    const mj = await res.json().catch(() => ({}));
+    if (res.ok && Array.isArray(mj.movies)) {
+      for (const m of mj.movies) {
+        if (m.state === "want") mvWanted++;
+        else if (m.state === "watched") { mvWatched++; mvMins += m.runtime || 100; }
+      }
+    }
+  } catch { /* movies stay optional */ }
+
+  const mins = watched * 45 + mvMins; // shows ≈45 min/ep + film runtimes
   const h = Math.floor(mins / 60), m = mins % 60;
 
   const badges = [
@@ -400,7 +584,11 @@ async function renderProfile(punch) {
     { e: "🏆", t: "Fifty club", ok: watched >= 50 },
     { e: "🌗", t: "Halfway hero", ok: shows.some((s) => s.ep_total > 0 && s.watched * 2 >= s.ep_total) },
     { e: "🏁", t: "Series finisher", ok: shows.some((s) => s.ep_total > 0 && s.watched >= s.ep_total) },
-  ].map((b) => `<span class="badge ${b.ok ? "" : "off"}">${b.e}${b.t}</span>`).join("");
+    { e: "🎬", t: "First film", ok: mvWatched >= 1 },
+  ]
+    .filter((b) => b.ok || mvWatched > 0 || watched > 0 || shows.length > 0) // hide the whole row on a fresh device
+    .map((b) => `<span class="badge ${b.ok ? "" : "off"}">${b.e}${b.t}</span>`)
+    .join("");
 
   const ics = `${location.origin}/calendar.ics?deviceId=${deviceId}`;
   punch(`
@@ -414,10 +602,11 @@ async function renderProfile(punch) {
       </div>
     </div>
     <div class="pstat">
-      <div class="st hl"><i class="k">TV TIME (EST)</i><b>${h ? h + " h " : ""}${m} m</b><span>${watched} episode${watched === 1 ? "" : "s"} counted at ~45 min</span></div>
+      <div class="st hl"><i class="k">TV TIME (EST)</i><b>${h ? h + " h " : ""}${m} m</b><span>shows ≈45 min/ep + film runtimes</span></div>
       <div class="st"><i class="k">EPISODES</i><b>${watched}</b><span>of ${epsAll} aired</span></div>
       <div class="st"><i class="k">SHOWS</i><b>${shows.length}</b><span>on your watch list</span></div>
-      <div class="st"><i class="k">COMPLETE</i><b>${pctAll}%</b><span>cumulative</span></div>
+      <div class="st"><i class="k">MOVIES</i><b>${mvWatched}</b><span>watched${mvWanted ? ` · ${mvWanted} queued` : ""}</span></div>
+      <div class="st"><i class="k">COMPLETE</i><b>${pctAll}%</b><span>across series</span></div>
     </div>
     <div class="sectT">BADGES</div>
     <div class="badges">${badges}</div>
@@ -461,6 +650,13 @@ $("#view").addEventListener("click", async (e) => {
     state.discCountry = t.dataset.v;
     localStorage.setItem("sb_disc", t.dataset.v);
     render();
+  } else if (a === "open-m") {
+    location.hash = `#movie/${t.dataset.id}`;
+  } else if (a === "render-again") {
+    render();
+  } else if (a === "mstate") {
+    e.stopPropagation();
+    await setMovieState(t);
   } else if (a === "open") {
     location.hash = `#show/${t.dataset.id}`;
   } else if (a === "toggle-reveal") {
@@ -497,6 +693,23 @@ $("#view").addEventListener("click", async (e) => {
     catch { toast("Copy blocked by browser — select the URL manually", true); }
   }
 });
+
+async function setMovieState(btn) {
+  const id = Number(btn.dataset.id);
+  const v = btn.dataset.v; // want | watched | unwatched | remove
+  // optimistic on trending/search rows: flip the button label before the roundtrip
+  if (btn.textContent.includes("+ Want")) btn.textContent = "…";
+  try {
+    await post("/api/movie-state", { deviceId, movieId: id, state: v });
+    if (v === "want") toast("On your film list");
+    else if (v === "watched") toast("Marked watched — counted toward your stats");
+    else if (v === "unwatched") toast("Back on the want list");
+    else toast("Removed from tracking");
+    render();
+  } catch {
+    if (btn.textContent === "…") btn.textContent = "+ Want";
+  }
+}
 
 async function toggleWatch(btn) {
   const epId = Number(btn.dataset.ep);

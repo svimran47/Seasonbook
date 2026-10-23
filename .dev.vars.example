@@ -1,0 +1,7 @@
+# Copy this file to .dev.vars (same folder, keep the exact name) and paste your TMDB token.
+# Get a free key: https://www.themoviedb.org/ → Settings → API → Developer.
+# Both forms work:
+#   TMDB_TOKEN="a1b2c3d4..."        (v3 api key string)
+#   TMDB_TOKEN="eyJhbGciOi..."      (v4 read-access token, starts with ey)
+# The Movies tab lights up the moment this file exists and npm run dev is restarted.
+TMDB_TOKEN=""

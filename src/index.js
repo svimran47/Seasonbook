@@ -1,4 +1,5 @@
 import { searchShows, fetchShow, fetchEpisodes, fetchSchedule, compactShow } from "./tvmaze.js";
+import { searchMovies, trendingMovies, fetchMovie, compactMovie, tmdbMissing } from "./tmdb.js";
 import { buildICS } from "./ics.js";
 
 const SYNC_TTL_MS = 12 * 60 * 60 * 1000; // TVmaze fair-use friendly cache window
@@ -51,6 +52,11 @@ async function route(request, env, method, pathname, sp) {
     if (pathname === "/api/tonight") return tonight(env, sp);
     if (pathname === "/api/schedule") return scheduleRoute(sp);
     if (pathname === "/api/follows") return listFollows(env, sp);
+    if (pathname === "/api/movies/search") return movieSearchRoute(env, sp);
+    if (pathname === "/api/movies/trending") return tmdbRoute(env, () => trendingMovies(env));
+    const movieMatch = pathname.match(/^\/api\/movies\/(\d+)$/);
+    if (movieMatch) return getMovieRoute(env, sp, Number(movieMatch[1]));
+    if (pathname === "/api/movies") return moviesRoute(env, sp);
     if (pathname === "/calendar.ics") return calendarFeed(env, sp);
     if (pathname === "/export.json") return exportRoute(env, sp);
   }
@@ -58,6 +64,7 @@ async function route(request, env, method, pathname, sp) {
   if (method === "POST") {
     if (pathname === "/api/follow") return setFollow(env, request);
     if (pathname === "/api/watched") return watchedRoute(env, request);
+    if (pathname === "/api/movie-state") return movieStateRoute(env, request);
     if (pathname === "/api/sync") return syncRoute(env, request, sp);
   }
 
@@ -76,17 +83,23 @@ function apiDocs() {
       "GET /api/shows/:id": "cached show + next/last episode",
       "POST /api/follow": "{ deviceId, showId, action: 'add' or 'remove' }",
       "GET /api/follows?deviceId=": "your shelf",
+      "GET /api/movies?deviceId=": "movie watch list ('want'/'watched' states)",
+      "GET /api/movies/search?q=": "TMDB search, compact movie results",
+      "GET /api/movies/trending": "TMDB trending this week",
+      "GET /api/movies/:id?deviceId=": "cached movie detail + this device's state",
+      "POST /api/movie-state": "{ deviceId, movieId, state: 'want' | 'watched' | 'unwatched' | 'remove' }",
       "GET /api/tonight?deviceId=&window=24&from=ISO": "upcoming episodes (UTC window)",
       "GET /api/schedule?country=US": "today's broadcast-TV listings per country (Discover tab)",
       "POST /api/sync": "{ ids: [..], force? } or { all: true }",
       "GET /calendar.ics?deviceId=&past_days=7&future_days=180": "calendar feed",
       "GET /api/shows/:id/episodes?deviceId=": "episode list with per-device watched flags",
       "POST /api/watched": "{ deviceId, episodeId, state: 'add' or 'remove' }",
-      "GET /export.json?deviceId=": "full copy: shows + watchmarks (JSON)",
+      "GET /export.json?deviceId=": "full copy: shows + watchmarks + movies (JSON)",
     },
     notes: [
       "deviceId stands in for accounts until weekend 3 — do NOT deploy publicly as-is (POST /api/sync is open).",
-      "Episode and airtime data by TVmaze — keep the attribution visible.",
+      "Episode and airtime data by TVmaze; movie data by TMDB(©). Keep both attributions visible.",
+      "TMDB routes answer 501 {error:'tmdb-token-missing'} until TMDB_TOKEN is configured (local: .dev.vars; prod: wrangler secret).",
     ],
   });
 }
@@ -175,6 +188,129 @@ async function scheduleRoute(sp) {
     count: listings.length,
     listings,
   });
+}
+
+// ── Movies (TMDB) ─────────────────────────────────────────────────────────────
+// A missing/bad TMDB key is a setup state, not a crash: routes answer 501 with
+// an actionable marker the Movies tab renders as a setup card.
+
+const TMDB_SETUP = {
+  error: "tmdb-token-missing",
+  how: [
+    "Create a free account at themoviedb.org → Settings → API → Developer (copy the key).",
+    'Local dev: put TMDB_TOKEN="your-key" in a .dev.vars file at the project root, then restart npm run dev.',
+    "Deployed: run `wrangler secret put TMDB_TOKEN` once per environment.",
+  ],
+};
+
+function tmdbSetup(err) {
+  return json({ ...TMDB_SETUP, detail: err.message }, 501);
+}
+
+// Wraps anything TMDB-backed so missing/broken keys surface as the friendly 501.
+async function tmdbRoute(env, fn) {
+  try {
+    return json(await fn(env));
+  } catch (err) {
+    if (err?.setup || String(err?.message).includes("tmdb-token-missing")) return tmdbSetup(err);
+    return json({ error: String(err?.message || err) }, 502);
+  }
+}
+
+async function movieSearchRoute(env, sp) {
+  const q = (sp.get("q") || "").trim();
+  if (!q) return json({ error: "q is required" }, 400);
+  const results = await tmdbRoute(env, (e) => searchMovies(e, q).then((list) => ({ count: list.length, results: list.slice(0, 20) })));
+  return results;
+}
+
+// The device's movie watch list (cached metadata joined with watch state).
+async function moviesRoute(env, sp) {
+  void env; // cache hydration below is best-effort; the list itself is D1-only
+  const deviceId = sp.get("deviceId");
+  if (!deviceId) return json({ error: "deviceId required" }, 400);
+  const { results } = await env.DB.prepare(
+    `SELECT m.id, m.title, m.year, m.release_date, m.runtime, m.poster, mm.state, mm.updated_at
+     FROM movie_marks mm JOIN movies m ON m.id = mm.movie_id
+     WHERE mm.device_id = ?1
+     ORDER BY mm.updated_at DESC`
+  ).bind(deviceId).all();
+  return json({ count: results.length, movies: results });
+}
+
+async function getMovieRoute(env, sp, id) {
+  const deviceId = sp.get("deviceId");
+  void sp;
+  let ok;
+  try {
+    ok = await cacheMovie(env, id);
+  } catch (err) {
+    if (err?.setup || String(err?.message).includes("tmdb-token-missing")) return tmdbSetup(err);
+    return json({ error: `tmdb fetch failed: ${err.message}` }, 502);
+  }
+  if (!ok) return json({ error: "unknown movie (TMDB 404 or fetch failed)", id }, 404);
+  const movie = await env.DB.prepare(
+    "SELECT id, title, year, release_date, runtime, poster, overview, status FROM movies WHERE id = ?1"
+  ).bind(id).first();
+  let state = null;
+  if (deviceId) {
+    const row = await env.DB.prepare(
+      "SELECT state, updated_at FROM movie_marks WHERE device_id = ?1 AND movie_id = ?2"
+    ).bind(deviceId, id).first();
+    state = row ?? null;
+  }
+  return json({ movie, state });
+}
+
+// Insert-or-refresh the D1 cache row for one movie (12h TTL, mirrors the TVmaze spine).
+async function cacheMovie(env, id, { force = false } = {}) {
+  const existing = await env.DB.prepare("SELECT synced_at FROM movies WHERE id = ?1").bind(id).first();
+  if (!force && existing && Date.now() - existing.synced_at < SYNC_TTL_MS) return true;
+  const movie = await fetchMovie(env, id);
+  if (!movie) return existing ? true : false;
+  const c = compactMovie(movie);
+  await env.DB.prepare(
+    `INSERT INTO movies (id, title, year, release_date, runtime, poster, overview, status, synced_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+     ON CONFLICT(id) DO UPDATE SET title = ?2, year = ?3, release_date = ?4, runtime = ?5,
+       poster = ?6, overview = ?7, status = ?8, synced_at = ?9`
+  ).bind(c.id, c.title, c.year, c.release_date, c.runtime, c.poster, c.overview, c.status, Date.now()).run();
+  return true;
+}
+
+async function movieStateRoute(env, request) {
+  const body = await request.json().catch(() => null);
+  if (!body?.deviceId || !Number(body.movieId)) {
+    return json({ error: "deviceId and numeric movieId required" }, 400);
+  }
+  const id = Number(body.movieId);
+  const state = body.state;
+
+  if (state === "remove") {
+    await env.DB.prepare("DELETE FROM movie_marks WHERE device_id = ?1 AND movie_id = ?2")
+      .bind(body.deviceId, id).run();
+    return json({ ok: true, device: body.deviceId, removed: id });
+  }
+  if (state !== "want" && state !== "watched" && state !== "unwatched") {
+    return json({ error: "state must be 'want', 'watched', 'unwatched' or 'remove'" }, 400);
+  }
+
+  let cached;
+  try {
+    cached = await cacheMovie(env, id);
+  } catch (err) {
+    if (err?.setup || String(err?.message).includes("tmdb-token-missing")) return tmdbSetup(err);
+    return json({ error: `tmdb fetch failed: ${err.message}` }, 502);
+  }
+  if (!cached) return json({ error: "unknown movie (TMDB 404 or fetch failed)", id }, 404);
+
+  // unwatched → back to the want-list (TV Time semantics)
+  const effective = state === "unwatched" ? "want" : state;
+  await env.DB.prepare(
+    `INSERT INTO movie_marks (device_id, movie_id, state, updated_at) VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT(device_id, movie_id) DO UPDATE SET state = ?3, updated_at = ?4`
+  ).bind(body.deviceId, id, effective, Date.now()).run();
+  return json({ ok: true, device: body.deviceId, movie: id, state: effective });
 }
 
 async function tonight(env, sp) {
@@ -374,12 +510,18 @@ async function exportRoute(env, sp) {
   const { results: marks } = await env.DB.prepare(
     "SELECT episode_id, show_id, watched_at FROM watchmarks WHERE device_id = ?1 ORDER BY watched_at DESC"
   ).bind(deviceId).all();
+  const { results: movies } = await env.DB.prepare(
+    `SELECT m.id, m.title, m.year, m.release_date, m.runtime, mm.state, mm.updated_at
+     FROM movie_marks mm JOIN movies m ON m.id = mm.movie_id
+     WHERE mm.device_id = ?1 ORDER BY mm.updated_at DESC`
+  ).bind(deviceId).all();
   return new Response(
     JSON.stringify({
       format: "seasonbook-export-v1",
       generated_at: new Date().toISOString(),
       device: deviceId,
       watchmarks: marks,
+      movies,
       shows,
     }, null, 2),
     {

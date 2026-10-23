@@ -29,7 +29,14 @@ npm run smoke   # end-to-end checks against the running server
 | `GET /calendar.ics?deviceId=` | calendar feed (past 7 days → next 180 days); subscribe in Google/Apple Calendar |
 | `GET /api/shows/:id/episodes?deviceId=` | episode list with per-device watched flags |
 | `POST /api/watched` | `{deviceId, episodeId, state: "add" or "remove"}` |
-| `GET /export.json?deviceId=` | full copy: shows + watchmarks (JSON) |
+| `GET /api/movies?deviceId=` | movie watch list (`want` / `watched` per device) |
+| `GET /api/movies/search?q=` | TMDB movie search |
+| `GET /api/movies/trending` | TMDB trending this week |
+| `GET /api/movies/:id?deviceId=` | cached movie detail + this device's state |
+| `POST /api/movie-state` | `{deviceId, movieId, state: "want" \| "watched" \| "unwatched" \| "remove"}` |
+| `GET /export.json?deviceId=` | full copy: shows + watchmarks + movies (JSON) |
+
+TMDB needs one free key: create it at themoviedb.org (Settings → API → Developer). Locally copy `.dev.vars.example` to `.dev.vars` and paste the token; in production `wrangler secret put TMDB_TOKEN`. Without it every route stays up — TMDB routes answer `501 {error: "tmdb-token-missing"}` and the Movies tab shows the setup card.
 
 Localhost-first is a project decision: domain registration and deployment happen at the final build — everything is tested here until then.
 

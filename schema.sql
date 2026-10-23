@@ -41,3 +41,26 @@ CREATE TABLE IF NOT EXISTS watchmarks (
   PRIMARY KEY (device_id, episode_id)
 );
 CREATE INDEX IF NOT EXISTS idx_watch_show_dev ON watchmarks (show_id, device_id);
+
+-- Movies (weekend 2): TMDB-backed film watch list. Same ownership rules as shows:
+-- cache in `movies`, device-scoped state in `movie_marks` ('want' or 'watched').
+CREATE TABLE IF NOT EXISTS movies (
+  id           INTEGER PRIMARY KEY,       -- TMDB movie id
+  title        TEXT NOT NULL,
+  year         INTEGER,                   -- release_date year
+  release_date TEXT,
+  runtime      INTEGER,
+  poster       TEXT,
+  overview     TEXT,
+  status       TEXT,                      -- Released / Post Production / ...
+  synced_at    INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS movie_marks (
+  device_id  TEXT NOT NULL,
+  movie_id   INTEGER NOT NULL REFERENCES movies(id),
+  state      TEXT NOT NULL,               -- 'want' or 'watched'
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (device_id, movie_id)
+);
+CREATE INDEX IF NOT EXISTS idx_movie_state ON movie_marks (state, device_id);

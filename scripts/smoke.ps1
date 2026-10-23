@@ -1,4 +1,4 @@
-# End-to-end smoke test for the weekend-1 spine.
+﻿# End-to-end smoke test for the weekend-1 spine.
 # Needs the dev server running: `npm run dev` then `npm run smoke`
 $ErrorActionPreference = "Stop"
 $base = "http://localhost:8787"
@@ -82,5 +82,32 @@ Write-Host ("TONIGHT+  : {0} rows near anchor; watched flags carried" -f $ton2.c
 $sched = Invoke-RestMethod "$base/api/schedule?country=GB"
 if ($sched.listings.Count -lt 3) { throw "schedule listings came back thin for GB" }
 Write-Host ("SCHEDULE  : {0} GB listings today ({1}); first = {2} @ {3}" -f $sched.count, $sched.date, $sched.listings[0].show, $sched.listings[0].time)
+
+# 13. Movies spine — full roundtrip with a key, 501 setup state without one
+try {
+  $trend = Invoke-RestMethod "$base/api/movies/trending"
+  if ($trend.results.Count -lt 3) { throw "trending list too thin" }
+  Write-Host ("TRENDING  : {0} films this week; first = {1} ({2})" -f $trend.results.Count, $trend.results[0].title, $trend.results[0].year)
+
+  $ms = Invoke-RestMethod "$base/api/movies/search?q=interstellar"
+  $mv = $ms.results[0]
+  Write-Host ("MSEARCH   : {0} results; first = {1} ({2})" -f $ms.count, $mv.title, $mv.year)
+
+  $body = '{"deviceId":"smoke-test","movieId":' + $mv.id + ',"state":"want"}'
+  Invoke-RestMethod -Method Post "$base/api/movie-state" -ContentType "application/json" -Body $body | Out-Null
+  $body = '{"deviceId":"smoke-test","movieId":' + $mv.id + ',"state":"watched"}'
+  Invoke-RestMethod -Method Post "$base/api/movie-state" -ContentType "application/json" -Body $body | Out-Null
+  $mlist = Invoke-RestMethod "$base/api/movies?deviceId=smoke-test"
+  $row = $mlist.movies | Where-Object { $_.id -eq $mv.id }
+  if (-not $row -or $row.state -ne "watched") { throw "movie state did not stick for $($mv.id)" }
+  Write-Host ("MOVIES    : {0} marked; {1} = {2} ({3} min)" -f $mlist.count, $mv.title, $row.state, $row.runtime)
+} catch {
+  $msg = $_.ErrorDetails.Message
+  if ($msg -match 'tmdb-token-missing') {
+    Write-Host "MOVIES    : setup state without a TMDB key (501 tmdb-token-missing) — expected until the key lands"
+  } else {
+    throw
+  }
+}
 
 Write-Host "SMOKE OK"
