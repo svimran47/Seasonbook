@@ -42,10 +42,16 @@ Localhost-first is a project decision: domain registration and deployment happen
 
 Sync has a 12h cache TTL against TVmaze fair use; hourly `scheduled` refresh is wired for after deploy.
 
-## Deploy (later in the week, own risk)
+## Deploy (done, first deployment 2026-10-23)
 
-1. `npx wrangler d1 create seasonbook` → paste the returned `database_id` into `wrangler.toml`
-2. `npx wrangler d1 execute seasonbook --remote --file=schema.sql`
+1. `npx wrangler d1 create seasonbook` → paste the returned `database_id` into `wrangler.toml` (done)
+2. `npx wrangler d1 execute seasonbook --remote --file=schema.sql` (done)
+3. TMDB key: `npx wrangler secret put TMDB_TOKEN` (done — v4 read token)
+4. `npx wrangler deploy` → live on `seasonbook.svimranmy.workers.dev`
+5. Hourly cron refresh wired via `[triggers] crons` — re-syncs every followed show (12h TVmaze TTL)
+6. Owner tool changes: **POST /api/sync is closed on prod** (503 unless a deployment sets `SB_OPEN_SYNC`); smoke $env:SB_BASE override: `$env:SB_BASE="https://seasonbook.svimranmy.workers.dev"; npm run smoke`
+
+Localhost-first still applies to code: edit locally, `npm run dev`, `npm run smoke` locally, then redeploy.
 3. `npx wrangler deploy`
 
 **Before going public:** protect `POST /api/sync` (add a token to `.dev.vars`), replace deviceId with real accounts (weekend 3), keep the TVmaze attribution, respect their fair use.

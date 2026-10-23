@@ -371,6 +371,9 @@ async function calendarFeed(env, sp) {
 }
 
 async function syncRoute(env, request, sp) {
+  // Bulk sync is an owner tool: closed by default on public deploys (no SB_OPEN_SYNC var set),
+  // open in local dev when .dev.vars sets SB_OPEN_SYNC="1". Cron sync is unaffected.
+  if (!env.SB_OPEN_SYNC) return json({ error: "sync is closed on this deployment (set SB_OPEN_SYNC to enable)" }, 503);
   const body = await request.json().catch(() => null);
   if (body?.all) return json({ ok: true, results: await syncAll(env) });
   let ids = parseIds(sp);
