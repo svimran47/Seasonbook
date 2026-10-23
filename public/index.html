@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seasonbook — internal build</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1117;--panel:#161b22;--line:#21262d;--fg:#e6edf3;--dim:#8b949e;--accent:#3fb950}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--fg)}
+main{max-width:720px;margin:0 auto;padding:20px 16px 70px}
+h1{font-size:22px;margin:0}
+header{border-bottom:1px solid var(--line);padding:14px 16px;display:flex;gap:10px;align-items:baseline}
+header p{margin:0;color:var(--dim);font-size:13px}
+h2{font-size:15px;margin:30px 0 10px;color:var(--accent)}
+.dim{color:var(--dim)}
+small{font-size:12px}
+.searchrow{display:flex;gap:8px}
+input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--fg);padding:10px 12px;font-size:15px}
+input:focus{outline:1px solid #2f81f7}
+button{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:13px;flex:none}
+button.go{background:#238636;border-color:#2ea043;color:#fff}
+button.go:hover{background:#2ea043}
+.card{display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
+.card img{width:44px;height:63px;object-fit:cover;border-radius:6px;flex:none;background:#000}
+.card .meta{flex:1;min-width:0}
+.card b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .sub{color:var(--dim);font-size:12px}
+.ep{display:flex;gap:10px;align-items:baseline;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
+.ep time{color:var(--dim);font-size:12px;flex:none;min-width:64px}
+.tag{color:#79c0ff;font-size:12px}
+#icsurl{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;word-break:break-all;font-size:12px;line-height:1.5}
+footer{position:fixed;bottom:0;left:0;right:0;text-align:center;padding:8px;background:var(--bg);border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
+a{color:#58a6ff;text-decoration:none}
+</style>
+</head>
+<body>
+<header><h1>📖 Seasonbook</h1><p>weekend 1 · data spine</p></header>
+<main>
+  <section>
+    <div class="searchrow">
+      <input id="q" placeholder="Find a show…" onkeydown="if(event.key==='Enter')doSearch()">
+      <button class="go" onclick="doSearch()">Search</button>
+    </div>
+    <div id="results"></div>
+  </section>
+
+  <section>
+    <h2>My shelf <small class="dim" id="shelfcount"></small></h2>
+    <div id="shelf"></div>
+    <small class="dim">Follow syncs the show + all episodes from TVmaze into D1 (12h cache).
+      <button onclick="resyncAll()">Refresh all</button></small>
+  </section>
+
+  <section>
+    <h2>Next 24 hours</h2>
+    <div id="tonight"></div>
+  </section>
+
+  <section>
+    <h2>Calendar feed</h2>
+    <code id="icsurl"></code>
+    <p><button onclick="copyIcs()">Copy feed URL</button>
+    <span class="dim">→ paste into Google Calendar ("Other calendars → From URL") or Apple Calendar ("New Calendar Subscription").</span></p>
+  </section>
+</main>
+<footer>Data by <a href="https://www.tvmaze.com/" target="_blank" rel="noopener">TVmaze</a>. Seasonbook hosts no video — schedule data only.</footer>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+let deviceId = localStorage.getItem('deviceId');
+if (!deviceId) {
+  deviceId = self.crypto.randomUUID ? crypto.randomUUID() : 'dev-' + Math.random().toString(36).slice(2);
+  localStorage.setItem('deviceId', deviceId);
+}
+
+const api = async (path, opts) => {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+};
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const epCode = (e) => e.number
+  ? 'S' + String(e.season).padStart(2, '0') + 'E' + String(e.number).padStart(2, '0')
+  : 'S' + e.season + ' special';
+
+async function doSearch() {
+  const q = $('#q').value.trim();
+  if (!q) return;
+  $('#results').innerHTML = '<p class="dim">Searching…</p>';
+  try {
+    const j = await api('/api/search?q=' + encodeURIComponent(q));
+    $('#results').innerHTML = j.results.length ? j.results.map(card).join('') : '<p class="dim">Nothing found.</p>';
+  } catch (e) {
+    $('#results').innerHTML = '<p class="dim">' + esc(e.message) + '</p>';
+  }
+}
+
+function card(s) {
+  return `<div class="card">
+    <img src="${s.image || 'data:,'}" onerror="this.remove()">
+    <div class="meta"><b>${esc(s.name)}</b>
+      <span class="sub">${esc(s.network || '—')} · ${esc(s.status || '')}${s.schedule ? ' · ' + esc(s.schedule) : ''}</span></div>
+    <button class="go" onclick="follow(${s.id})">Follow</button>
+  </div>`;
+}
+
+async function follow(id) {
+  await api('/api/follow', {method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({deviceId, showId: id, action: 'add'})});
+  $('#results').innerHTML = '';
+  load();
+}
+
+async function unfollow(id) {
+  await api('/api/follow', {method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({deviceId, showId: id, action: 'remove'})});
+  load();
+}
+
+async function resyncAll() {
+  await api('/api/sync', {method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({all: true, force: true})});
+  load();
+}
+
+async function load() {
+  shelf().catch(() => {});
+  tonight().catch(() => {});
+}
+
+async function shelf() {
+  const j = await api('/api/follows?deviceId=' + deviceId);
+  $('#shelfcount').textContent = j.count ? `(${j.count})` : '';
+  $('#shelf').innerHTML = j.shows.length ? j.shows.map((s) =>
+    `<div class="card"><div class="meta"><b>${esc(s.name)}</b>
+      <span class="sub">${esc(s.network || '—')}${s.schedule ? ' · ' + esc(s.schedule) : ''}</span></div>
+      <button onclick="unfollow(${s.id})">Remove</button></div>`).join('')
+    : '<p class="dim">Nothing followed yet — search above.</p>';
+}
+
+async function tonight() {
+  const j = await api('/api/tonight?deviceId=' + deviceId);
+  $('#tonight').innerHTML = j.episodes.length ? j.episodes.map((e) =>
+    `<div class="ep"><time>${new Date(e.air_utc).toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit'})}</time>
+     <div><span class="tag">${esc(e.show_name)}</span> ${esc(epCode(e))}
+     <b>${esc(e.episode_name || '—')}</b> <span class="dim">${esc(e.network || '')}</span></div></div>`).join('')
+    : '<p class="dim">Nothing airing in the next 24h for your shelf.</p>';
+}
+
+$('#icsurl').textContent = location.origin + '/calendar.ics?deviceId=' + deviceId;
+function copyIcs() { navigator.clipboard.writeText($('#icsurl').textContent); }
+
+load();
+</script>
+</body>
+</html>

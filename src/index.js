@@ -1,0 +1,289 @@
+import { searchShows, fetchShow, fetchEpisodes, compactShow } from "./tvmaze.js";
+import { buildICS } from "./ics.js";
+
+const SYNC_TTL_MS = 12 * 60 * 60 * 1000; // TVmaze fair-use friendly cache window
+
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "access-control-allow-origin": "*",
+    },
+  });
+
+export default {
+  async fetch(request, env) {
+    const { pathname, searchParams } = new URL(request.url);
+    try {
+      if (pathname.startsWith("/api") || pathname === "/calendar.ics") {
+        return await route(request, env, request.method, pathname, searchParams);
+      }
+      const asset = await env.ASSETS.fetch(request);
+      return asset.status !== 404 ? asset : env.ASSETS.fetch(new URL("/index.html", request.url));
+    } catch (err) {
+      return json({ error: String(err?.message || err) }, 500);
+    }
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(syncAll(env));
+  },
+};
+
+async function route(request, env, method, pathname, sp) {
+  if (method === "OPTIONS") {
+    return new Response(null, {
+      headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET,POST,OPTIONS",
+        "access-control-allow-headers": "content-type",
+      },
+    });
+  }
+
+  if (method === "GET") {
+    if (pathname === "/api") return apiDocs();
+    if (pathname === "/api/search") return searchRoute(sp);
+    const showMatch = pathname.match(/^\/api\/shows\/(\d+)$/);
+    if (showMatch) return getShow(env, Number(showMatch[1]));
+    if (pathname === "/api/tonight") return tonight(env, sp);
+    if (pathname === "/api/follows") return listFollows(env, sp);
+    if (pathname === "/calendar.ics") return calendarFeed(env, sp);
+  }
+
+  if (method === "POST") {
+    if (pathname === "/api/follow") return setFollow(env, request);
+    if (pathname === "/api/sync") return syncRoute(env, request, sp);
+  }
+
+  return json({ error: `no route: ${method} ${pathname}` }, 404);
+}
+
+function apiDocs() {
+  return json({
+    name: "Seasonbook",
+    build: "weekend-1 spine",
+    app: "/",
+    endpoints: {
+      "GET /": "internal PWA (search / follow / tonight / ICS feed)",
+      "GET /api": "this page",
+      "GET /api/search?q=": "TVmaze search, compact results",
+      "GET /api/shows/:id": "cached show + next/last episode",
+      "POST /api/follow": "{ deviceId, showId, action: 'add' or 'remove' }",
+      "GET /api/follows?deviceId=": "your shelf",
+      "GET /api/tonight?deviceId=&window=24&from=ISO": "upcoming episodes (UTC window)",
+      "POST /api/sync": "{ ids: [..], force? } or { all: true }",
+      "GET /calendar.ics?deviceId=&past_days=7&future_days=180": "calendar feed",
+    },
+    notes: [
+      "deviceId stands in for accounts until weekend 3 — do NOT deploy publicly as-is (POST /api/sync is open).",
+      "Episode and airtime data by TVmaze — keep the attribution visible.",
+    ],
+  });
+}
+
+async function searchRoute(sp) {
+  const q = (sp.get("q") || "").trim();
+  if (!q) return json({ error: "q is required" }, 400);
+  const found = await searchShows(q);
+  return json({
+    count: found.length,
+    results: found.slice(0, 20).map((r) => compactShow(r.show)),
+  });
+}
+
+async function getShow(env, id) {
+  let show = await env.DB.prepare("SELECT * FROM shows WHERE id = ?1").bind(id).first();
+  if (!show) {
+    const synced = await syncShow(env, id).catch(() => null);
+    if (!synced?.ok) return json({ error: "unknown show (TVmaze 404 or fetch failed)", id }, 404);
+    show = await env.DB.prepare("SELECT * FROM shows WHERE id = ?1").bind(id).first();
+  }
+  const now = new Date().toISOString();
+  const next = await env.DB.prepare(
+    "SELECT id, season, number, name, air_utc, runtime FROM episodes WHERE show_id = ?1 AND air_utc >= ?2 ORDER BY air_utc ASC LIMIT 1"
+  ).bind(id, now).first();
+  const last = await env.DB.prepare(
+    "SELECT id, season, number, name, air_utc FROM episodes WHERE show_id = ?1 AND air_utc < ?2 ORDER BY air_utc DESC LIMIT 1"
+  ).bind(id, now).first();
+  return json({ show, next_episode: next ?? null, last_episode: last ?? null });
+}
+
+async function setFollow(env, request) {
+  const body = await request.json().catch(() => null);
+  if (!body?.deviceId || !Number(body.showId)) {
+    return json({ error: "deviceId and numeric showId required" }, 400);
+  }
+  const id = Number(body.showId);
+
+  if (body.action === "remove") {
+    await env.DB.prepare("DELETE FROM follows WHERE device_id = ?1 AND show_id = ?2")
+      .bind(body.deviceId, id)
+      .run();
+    return json({ ok: true, device: body.deviceId, removed: id });
+  }
+
+  const sync = await syncShow(env, id).catch((e) => ({ ok: false, error: String(e?.message || e) }));
+  if (!sync.ok) return json({ error: `sync failed: ${sync.error}`, id }, 502);
+
+  await env.DB.prepare("INSERT OR IGNORE INTO follows (device_id, show_id, created_at) VALUES (?1, ?2, ?3)")
+    .bind(body.deviceId, id, Date.now())
+    .run();
+  return json({ ok: true, device: body.deviceId, following: id, sync });
+}
+
+async function listFollows(env, sp) {
+  const deviceId = sp.get("deviceId");
+  if (!deviceId) return json({ error: "deviceId required" }, 400);
+  const { results } = await env.DB.prepare(
+    `SELECT s.id, s.name, s.status, s.network, s.timezone, s.schedule, s.image, f.created_at
+     FROM follows f JOIN shows s ON s.id = f.show_id
+     WHERE f.device_id = ?1 ORDER BY f.created_at DESC`
+  ).bind(deviceId).all();
+  return json({ count: results.length, shows: results });
+}
+
+async function tonight(env, sp) {
+  const hours = Math.min(Math.max(Number(sp.get("window") || 24), 0.5), 24 * 60);
+  const from = sp.get("from") ? new Date(sp.get("from")) : new Date();
+  if (isNaN(from.getTime())) return json({ error: "from must be an ISO date" }, 400);
+  const to = new Date(from.getTime() + hours * 3600 * 1000);
+  const deviceId = sp.get("deviceId");
+  const ids = parseIds(sp);
+  if (!deviceId && !ids.length) return json({ error: "deviceId or ids required" }, 400);
+  const episodes = await queryUpcoming(env, { deviceId, ids, from: from.toISOString(), to: to.toISOString() });
+  return json({ from: from.toISOString(), to: to.toISOString(), count: episodes.length, episodes });
+}
+
+// Shared query for /api/tonight and /calendar.ics (UTC-normalized air_utc comparisons)
+async function queryUpcoming(env, { deviceId, ids, from, to }) {
+  const selection = `e.id, e.show_id, e.season, e.number, e.name AS episode_name, e.air_utc, e.runtime,
+                     s.name AS show_name, s.network`;
+  if (deviceId) {
+    const { results } = await env.DB.prepare(
+      `SELECT ${selection}
+       FROM follows f
+       JOIN episodes e ON e.show_id = f.show_id
+       JOIN shows s ON s.id = f.show_id
+       WHERE f.device_id = ?1 AND e.air_utc >= ?2 AND e.air_utc < ?3
+       ORDER BY e.air_utc ASC LIMIT 600`
+    ).bind(deviceId, from, to).all();
+    return results;
+  }
+  const { results } = await env.DB.prepare(
+    `SELECT ${selection}
+     FROM episodes e JOIN shows s ON s.id = e.show_id
+     WHERE e.show_id IN (${ids.map(Number).join(",") || "0"}) AND e.air_utc >= ?1 AND e.air_utc < ?2
+     ORDER BY e.air_utc ASC LIMIT 600`
+  ).bind(from, to).all();
+  return results;
+}
+
+const CAL_HEADERS = {
+  "content-type": "text/calendar; charset=utf-8",
+  "cache-control": "no-store",
+  "content-disposition": 'inline; filename="seasonbook.ics"',
+};
+
+async function calendarFeed(env, sp) {
+  const pastDays = clampNum(sp.get("past_days"), 7, 0, 36500);
+  const futureDays = clampNum(sp.get("future_days"), 180, 0, 36500);
+  const from = new Date(Date.now() - pastDays * 864e5).toISOString();
+  const to = new Date(Date.now() + futureDays * 864e5).toISOString();
+  const deviceId = sp.get("deviceId");
+  const ids = parseIds(sp);
+  if (!deviceId && !ids.length) return json({ error: "deviceId or ids required" }, 400);
+  const rows = await queryUpcoming(env, { deviceId, ids, from, to });
+  return new Response(buildICS(rows), { headers: CAL_HEADERS });
+}
+
+async function syncRoute(env, request, sp) {
+  const body = await request.json().catch(() => null);
+  if (body?.all) return json({ ok: true, results: await syncAll(env) });
+  let ids = parseIds(sp);
+  if (!ids.length && Array.isArray(body?.ids)) ids = body.ids.map(Number).filter((n) => n > 0);
+  if (!ids.length) return json({ error: "send ids=[tv-id,...] as ?ids= or body, or { all: true }" }, 400);
+  const results = [];
+  for (const id of ids.slice(0, 50)) {
+    results.push(
+      await syncShow(env, id, { force: !!body?.force }).catch((e) => ({
+        id,
+        ok: false,
+        error: String(e?.message || e),
+      }))
+    );
+  }
+  return json({ ok: true, results });
+}
+
+function chunk(arr, n) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
+async function syncShow(env, id, { force = false } = {}) {
+  const existing = await env.DB.prepare("SELECT synced_at FROM shows WHERE id = ?1").bind(id).first();
+  if (!force && existing && Date.now() - existing.synced_at < SYNC_TTL_MS) {
+    return { id, ok: true, cached: true };
+  }
+
+  const show = await fetchShow(id);
+  if (!show) return { id, ok: false, error: "not-found" };
+  const c = compactShow(show);
+  await env.DB.prepare(
+    `INSERT INTO shows (id, name, status, network, timezone, schedule, runtime, image, synced_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+     ON CONFLICT(id) DO UPDATE SET name = ?2, status = ?3, network = ?4, timezone = ?5,
+       schedule = ?6, runtime = ?7, image = ?8, synced_at = ?9`
+  ).bind(c.id, c.name, c.status, c.network, c.timezone, c.schedule, c.runtime, c.image, Date.now()).run();
+
+  const eps = await fetchEpisodes(id);
+  const now = Date.now();
+  const stmt = env.DB.prepare(
+    `INSERT INTO episodes (id, show_id, season, number, name, airdate, air_utc, runtime, synced_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+     ON CONFLICT(id) DO UPDATE SET season = ?3, number = ?4, name = ?5, airdate = ?6,
+       air_utc = ?7, runtime = ?8, synced_at = ?9`
+  );
+  for (const part of chunk(eps, 40)) {
+    await env.DB.batch(
+      part.map((e) =>
+        stmt.bind(
+          e.id,
+          id,
+          e.season ?? 0,
+          e.number ?? null,
+          e.name ?? null,
+          e.airdate ?? null,
+          e.airstamp ? new Date(e.airstamp).toISOString() : null,
+          e.runtime ?? null,
+          now
+        )
+      )
+    );
+  }
+  return { id, ok: true, episodes: eps.length };
+}
+
+async function syncAll(env) {
+  const { results } = await env.DB.prepare("SELECT id FROM shows ORDER BY id").all();
+  const out = [];
+  for (const { id } of results) {
+    out.push(await syncShow(env, id).catch((e) => ({ id, ok: false, error: String(e?.message || e) })));
+  }
+  return out;
+}
+
+function parseIds(sp) {
+  return (sp.get("ids") || "")
+    .split(",")
+    .map((x) => Number(x.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+}
+
+function clampNum(raw, fallback, min, max) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(n, min), max);
+}
