@@ -16,7 +16,7 @@ export default {
   async fetch(request, env) {
     const { pathname, searchParams } = new URL(request.url);
     try {
-      if (pathname.startsWith("/api") || pathname === "/calendar.ics") {
+      if (pathname.startsWith("/api") || pathname === "/calendar.ics" || pathname === "/export.json") {
         return await route(request, env, request.method, pathname, searchParams);
       }
       const asset = await env.ASSETS.fetch(request);
@@ -44,15 +44,19 @@ async function route(request, env, method, pathname, sp) {
   if (method === "GET") {
     if (pathname === "/api") return apiDocs();
     if (pathname === "/api/search") return searchRoute(sp);
+    const epsMatch = pathname.match(/^\/api\/shows\/(\d+)\/episodes$/);
+    if (epsMatch) return episodesRoute(env, sp, Number(epsMatch[1]));
     const showMatch = pathname.match(/^\/api\/shows\/(\d+)$/);
     if (showMatch) return getShow(env, Number(showMatch[1]));
     if (pathname === "/api/tonight") return tonight(env, sp);
     if (pathname === "/api/follows") return listFollows(env, sp);
     if (pathname === "/calendar.ics") return calendarFeed(env, sp);
+    if (pathname === "/export.json") return exportRoute(env, sp);
   }
 
   if (method === "POST") {
     if (pathname === "/api/follow") return setFollow(env, request);
+    if (pathname === "/api/watched") return watchedRoute(env, request);
     if (pathname === "/api/sync") return syncRoute(env, request, sp);
   }
 
@@ -74,6 +78,9 @@ function apiDocs() {
       "GET /api/tonight?deviceId=&window=24&from=ISO": "upcoming episodes (UTC window)",
       "POST /api/sync": "{ ids: [..], force? } or { all: true }",
       "GET /calendar.ics?deviceId=&past_days=7&future_days=180": "calendar feed",
+      "GET /api/shows/:id/episodes?deviceId=": "episode list with per-device watched flags",
+      "POST /api/watched": "{ deviceId, episodeId, state: 'add' or 'remove' }",
+      "GET /export.json?deviceId=": "full copy: shows + watchmarks (JSON)",
     },
     notes: [
       "deviceId stands in for accounts until weekend 3 — do NOT deploy publicly as-is (POST /api/sync is open).",
@@ -136,7 +143,9 @@ async function listFollows(env, sp) {
   const deviceId = sp.get("deviceId");
   if (!deviceId) return json({ error: "deviceId required" }, 400);
   const { results } = await env.DB.prepare(
-    `SELECT s.id, s.name, s.status, s.network, s.timezone, s.schedule, s.image, f.created_at
+    `SELECT s.id, s.name, s.status, s.network, s.timezone, s.schedule, s.image, f.created_at,
+       (SELECT COUNT(*) FROM episodes e WHERE e.show_id = s.id) AS ep_total,
+       (SELECT COUNT(*) FROM watchmarks w WHERE w.show_id = s.id AND w.device_id = f.device_id) AS watched
      FROM follows f JOIN shows s ON s.id = f.show_id
      WHERE f.device_id = ?1 ORDER BY f.created_at DESC`
   ).bind(deviceId).all();
@@ -161,10 +170,11 @@ async function queryUpcoming(env, { deviceId, ids, from, to }) {
                      s.name AS show_name, s.network`;
   if (deviceId) {
     const { results } = await env.DB.prepare(
-      `SELECT ${selection}
+      `SELECT ${selection}, (w.episode_id IS NOT NULL) AS watched
        FROM follows f
        JOIN episodes e ON e.show_id = f.show_id
        JOIN shows s ON s.id = f.show_id
+       LEFT JOIN watchmarks w ON w.episode_id = e.id AND w.device_id = ?1
        WHERE f.device_id = ?1 AND e.air_utc >= ?2 AND e.air_utc < ?3
        ORDER BY e.air_utc ASC LIMIT 600`
     ).bind(deviceId, from, to).all();
@@ -286,4 +296,72 @@ function clampNum(raw, fallback, min, max) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(Math.max(n, min), max);
+}
+
+async function episodesRoute(env, sp, showId) {
+  const deviceId = sp.get("deviceId");
+  if (!deviceId) return json({ error: "deviceId required" }, 400);
+  const show = await env.DB.prepare("SELECT id, name FROM shows WHERE id = ?1").bind(showId).first();
+  if (!show) return json({ error: "show not cached — follow it or POST /api/sync first", showId }, 404);
+  const { results } = await env.DB.prepare(
+    `SELECT e.id, e.season, e.number, e.name, e.airdate, e.air_utc, e.runtime,
+            (w.episode_id IS NOT NULL) AS watched
+     FROM episodes e
+     LEFT JOIN watchmarks w ON w.episode_id = e.id AND w.device_id = ?1
+     WHERE e.show_id = ?2
+     ORDER BY e.season ASC, (e.number IS NULL), e.number ASC`
+  ).bind(deviceId, showId).all();
+  const watched = results.reduce((n, r) => n + (r.watched ? 1 : 0), 0);
+  return json({ show, count: results.length, watched, episodes: results });
+}
+
+async function watchedRoute(env, request) {
+  const body = await request.json().catch(() => null);
+  if (!body?.deviceId || !Number(body.episodeId)) {
+    return json({ error: "deviceId and numeric episodeId required" }, 400);
+  }
+  const epId = Number(body.episodeId);
+  if (body.state === "remove") {
+    await env.DB.prepare("DELETE FROM watchmarks WHERE device_id = ?1 AND episode_id = ?2")
+      .bind(body.deviceId, epId).run();
+    return json({ ok: true, unwatched: epId });
+  }
+  const ep = await env.DB.prepare("SELECT id, show_id FROM episodes WHERE id = ?1").bind(epId).first();
+  if (!ep) return json({ error: "unknown episode" }, 404);
+  await env.DB.prepare(
+    `INSERT INTO watchmarks (device_id, episode_id, show_id, watched_at)
+     VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT(device_id, episode_id) DO UPDATE SET watched_at = ?4`
+  ).bind(body.deviceId, epId, ep.show_id, Date.now()).run();
+  return json({ ok: true, watched: epId, show: ep.show_id });
+}
+
+async function exportRoute(env, sp) {
+  const deviceId = sp.get("deviceId");
+  if (!deviceId) return json({ error: "deviceId required" }, 400);
+  const { results: shows } = await env.DB.prepare(
+    `SELECT s.id, s.name, s.status, s.network, s.timezone, s.schedule, f.created_at,
+       (SELECT COUNT(*) FROM episodes e WHERE e.show_id = s.id) AS ep_total,
+       (SELECT COUNT(*) FROM watchmarks w WHERE w.show_id = s.id AND w.device_id = f.device_id) AS watched
+     FROM follows f JOIN shows s ON s.id = f.show_id
+     WHERE f.device_id = ?1 ORDER BY f.created_at DESC`
+  ).bind(deviceId).all();
+  const { results: marks } = await env.DB.prepare(
+    "SELECT episode_id, show_id, watched_at FROM watchmarks WHERE device_id = ?1 ORDER BY watched_at DESC"
+  ).bind(deviceId).all();
+  return new Response(
+    JSON.stringify({
+      format: "seasonbook-export-v1",
+      generated_at: new Date().toISOString(),
+      device: deviceId,
+      watchmarks: marks,
+      shows,
+    }, null, 2),
+    {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "content-disposition": `attachment; filename="seasonbook-export-${deviceId.slice(0, 8)}.json"`,
+      },
+    }
+  );
 }

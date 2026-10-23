@@ -26,6 +26,11 @@ npm run smoke   # end-to-end checks against the running server
 | `GET /api/tonight?deviceId=&window=24` | upcoming episodes in a UTC window (`from=` for testing) |
 | `POST /api/sync` | `{ids: [..]}` or `{all: true, force: true}` |
 | `GET /calendar.ics?deviceId=` | calendar feed (past 7 days → next 180 days); subscribe in Google/Apple Calendar |
+| `GET /api/shows/:id/episodes?deviceId=` | episode list with per-device watched flags |
+| `POST /api/watched` | `{deviceId, episodeId, state: "add" or "remove"}` |
+| `GET /export.json?deviceId=` | full copy: shows + watchmarks (JSON) |
+
+Localhost-first is a project decision: domain registration and deployment happen at the final build — everything is tested here until then.
 
 Sync has a 12h cache TTL against TVmaze fair use; hourly `scheduled` refresh is wired for after deploy.
 

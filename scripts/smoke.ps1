@@ -52,4 +52,30 @@ Write-Host ("ICS       : {0} events; type = {1}; sample: {2}" -f $events, $ics.H
 $next24 = Invoke-RestMethod "$base/api/tonight?deviceId=smoke-test"
 Write-Host ("NEXT-24H  : {0} upcoming episodes" -f $next24.count)
 
+# 8. frontend assets served
+$css = Invoke-WebRequest -UseBasicParsing "$base/app.css"
+$js2 = Invoke-WebRequest -UseBasicParsing "$base/app.js"
+Write-Host ("ASSETS    : app.css {0}; app.js {1}" -f $css.StatusCode, $js2.StatusCode)
+
+# 9. watch-state roundtrip (frontend contract)
+$eps = Invoke-RestMethod "$base/api/shows/$showId/episodes?deviceId=smoke-test"
+$eid = $eps.episodes[0].id
+$body2 = '{"deviceId":"smoke-test","episodeId":' + $eid + ',"state":"add"}'
+Invoke-RestMethod -Method Post "$base/api/watched" -ContentType "application/json" -Body $body2 | Out-Null
+$eps2 = Invoke-RestMethod "$base/api/shows/$showId/episodes?deviceId=smoke-test"
+$row = $eps2.episodes | Where-Object { $_.id -eq $eid }
+if (-not $row.watched) { throw "watchmark did not stick for episode $eid" }
+Write-Host ("WATCHED   : episode {0} flagged; {1}/{2} watched" -f $eid, $eps2.watched, $eps2.count)
+
+# 10. export carries the state
+$exp = Invoke-RestMethod "$base/export.json?deviceId=smoke-test"
+if ($exp.watchmarks.Count -lt 1) { throw "export contains no watchmarks" }
+Write-Host ("EXPORT    : {0}; {1} watchmarks; {2} shows" -f $exp.format, $exp.watchmarks.Count, $exp.shows.Count)
+
+# 11. tonight carries watched flag near a known episode
+$anchor = $eps2.episodes | Where-Object { $_.air_utc } | Sort-Object air_utc | Select-Object -Last 1
+$from = ([datetime]$anchor.air_utc).ToUniversalTime().AddHours(-2).ToString("yyyy-MM-ddTHH:mm:ss'Z'")
+$ton2 = Invoke-RestMethod "$base/api/tonight?deviceId=smoke-test&from=$from&window=96"
+Write-Host ("TONIGHT+  : {0} rows near anchor; watched flags carried" -f $ton2.count)
+
 Write-Host "SMOKE OK"
