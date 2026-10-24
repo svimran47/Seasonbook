@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "db": "wrangler d1 execute seasonbook --local --file=schema.sql",
+    "gen-icons": "node scripts/gen-icons.mjs",
     "deploy": "wrangler deploy",
     "smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke.ps1"
   },
