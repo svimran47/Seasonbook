@@ -1,0 +1,33 @@
+﻿{
+    "project_info":  {
+                         "project_number":  "251543221624",
+                         "project_id":  "seasonbook-tv-23302fa0",
+                         "storage_bucket":  "seasonbook-tv-23302fa0.firebasestorage.app"
+                     },
+    "client":  [
+                   {
+                       "client_info":  {
+                                           "mobilesdk_app_id":  "1:251543221624:android:2eeb68caac6707cbca848d",
+                                           "android_client_info":  {
+                                                                       "package_name":  "com.svimranmy.seasonbook"
+                                                                   }
+                                       },
+                       "oauth_client":  [
+
+                                        ],
+                       "api_key":  [
+                                       {
+                                           "current_key":  "AIzaSyC0ZRHweJVrZ7KWCko4B5caWzvF-fUvXhI"
+                                       }
+                                   ],
+                       "services":  {
+                                        "appinvite_service":  {
+                                                                  "other_platform_oauth_client":  [
+
+                                                                                                  ]
+                                                              }
+                                    }
+                   }
+               ],
+    "configuration_version":  "1"
+}

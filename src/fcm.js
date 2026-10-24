@@ -22,11 +22,17 @@ function serviceAccount(env) {
     e.setup = true;
     throw e;
   }
+  let raw = env.FCM_SERVICE_ACCOUNT;
+  if (raw.charCodeAt(0) !== 123) {   // not "{" -> accept base64-encoded JSON (dotenv-safe single line)
+    try { raw = atob(raw); } catch {
+      throw new Error("FCM_SERVICE_ACCOUNT is neither JSON nor base64-encoded JSON");
+    }
+  }
   let sa;
   try {
-    sa = JSON.parse(env.FCM_SERVICE_ACCOUNT);
+    sa = JSON.parse(raw);
   } catch {
-    throw new Error("FCM_SERVICE_ACCOUNT is not valid JSON — paste the whole service-account key file");
+    throw new Error("FCM_SERVICE_ACCOUNT is not valid JSON — paste the whole service-account key file (or its base64 form via scripts/setup-firebase.ps1)");
   }
   if (!sa.project_id || !sa.client_email || !sa.private_key) {
     throw new Error("service-account JSON is missing project_id / client_email / private_key");

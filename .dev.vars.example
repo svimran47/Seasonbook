@@ -11,9 +11,11 @@ TMDB_TOKEN=""
 # ── Notifications (FCM HTTP v1, weekend 2) ───────────────────────────────────
 # The app subscribes each followed show to FCM topic "show-<tvmazeId>"; this worker
 # pushes one message per episode (≤75 min before air, ledger-deduped).
-# Steps: console.firebase.google.com → new project → Project settings → Service
-# accounts → "Generate new private key" → save the JSON → paste the WHOLE object,
-# unfolded, on this one line. Restart npm run dev afterwards.
+# Steps (or just run scripts/setup-firebase.ps1 after one `firebase login` - it does everything):
+# console.firebase.google.com -> new project -> Project settings -> Service
+# accounts -> "Generate new private key" -> save the JSON. Paste the WHOLE JSON
+# on this one line, or its base64 form (FCM_SERVICE_ACCOUNT=<base64>) which is
+# what the automation writes; src/fcm.js accepts both. Restart npm run dev after.
 # Without it nothing breaks: announces are skipped and /api/notify/status says
 # "not-configured", exactly like the TMDB setup-card pattern.
 FCM_SERVICE_ACCOUNT=""

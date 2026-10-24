@@ -10,5 +10,8 @@ android/app/build/
 android/local.properties/
 .gradle
 
+# FCM service-account key (never commit)
+.fcm-service-account.json
+
 # Local-only until push credentials carry the `workflow` OAuth scope (commit 03ded53):
 .github/workflows/android-ci.yml

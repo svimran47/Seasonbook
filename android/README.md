@@ -50,6 +50,12 @@ behavior exactly like the TMDB key pattern:
    (one line)`; production `npx wrangler secret put FCM_SERVICE_ACCOUNT`.
 4. Restart `npm run dev`; `GET /api/notify/status` flips to `configured`.
 
+**Or run the one-shot automation instead (this machine):** `firebase login` once (device-flow
+URL), then `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-firebase.ps1` —
+it creates the project, registers the app, writes `google-services.json`, mints the service
+account key, wires `.dev.vars` (preserving other secrets), pushes the prod secret, and prints
+the redeploy reminder. Key json is gitignored and never printed.
+
 ## Testing locally (worker on this PC)
 
 ```
