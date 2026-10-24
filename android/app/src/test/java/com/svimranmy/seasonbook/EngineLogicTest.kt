@@ -44,8 +44,9 @@ class EngineLogicTest {
 
     @Test
     fun `iso air_utc parses and garbage returns null`() {
-        assertEquals(1380544800000L, EngineLogic.parseIsoToMillis("2013-09-30T02:00:00Z"))
-        assertEquals(1380544800000L, EngineLogic.parseIsoToMillis("2013-09-30T02:00:00.000Z"))
+        // "Felina" aired 2013-09-30T02:00:00Z (the value the worker's smoke suite shows for show 169)
+        assertEquals(1380506400000L, EngineLogic.parseIsoToMillis("2013-09-30T02:00:00Z"))
+        assertEquals(1380506400000L, EngineLogic.parseIsoToMillis("2013-09-30T02:00:00.000Z"))
         assertNull(EngineLogic.parseIsoToMillis("tbd"))
         assertNull(EngineLogic.parseIsoToMillis(""))
     }
