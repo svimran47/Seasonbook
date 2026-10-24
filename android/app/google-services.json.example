@@ -1,0 +1,20 @@
+{
+  "_comment": "Placeholder shape only — gradle refuses the google-services plugin until your real google-services.json (from console.firebase.google.com) lands in android/app/. CI builds stay green without it.",
+  "project_info": {
+    "project_number": "0",
+    "project_id": "seasonbook-example",
+    "storage_bucket": "seasonbook-example.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:0:android:EXAMPLE",
+        "android_client_info": { "package_name": "com.svimranmy.seasonbook" }
+      },
+      "oauth_client": [],
+      "api_key": [{ "current_key": "EXAMPLE_REPLACE_WITH_REAL_KEY" }],
+      "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+    }
+  ],
+  "configuration_version": "1"
+}
