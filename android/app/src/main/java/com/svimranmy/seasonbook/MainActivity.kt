@@ -39,14 +39,14 @@ class MainActivity : Activity() {
         }
 
         fun label(text: String) = TextView(this).apply {
-            text = text; setPadding(0, pad / 2, 0, d / 2); textSize = 13f
+            setText(text); setPadding(0, pad / 2, 0, d / 2); textSize = 13f
         }
         fun button(text: String, onClick: () -> Unit) = Button(this).apply {
-            text = text; setOnClickListener { onClick() }
+            setText(text); setOnClickListener { onClick() }
         }
 
         val url = EditText(this).apply {
-            setText(Prefs.deviceBaseUrl(this@MainActivity)); singleLine = true
+            setText(Prefs.deviceBaseUrl(this@MainActivity)); setSingleLine(true)
         }
 
         out = TextView(this).apply {
@@ -57,7 +57,7 @@ class MainActivity : Activity() {
         showId = EditText(this).apply {
             hint = "tvMaze show id (169 = Breaking Bad)"
             inputType = InputType.TYPE_CLASS_NUMBER
-            singleLine = true
+            setSingleLine(true)
         }
 
         col.addView(label("Worker base URL — 'adb reverse tcp:8787 tcp:8787' keeps localhost working on-device"))
