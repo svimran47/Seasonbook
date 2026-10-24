@@ -1,6 +1,7 @@
 import { searchShows, fetchShow, fetchEpisodes, fetchSchedule, compactShow } from "./tvmaze.js";
 import { searchMovies, trendingMovies, fetchMovie, compactMovie, tmdbMissing } from "./tmdb.js";
 import { buildICS } from "./ics.js";
+import { airtimeMessage, fcmConfigured, sendToTopic } from "./fcm.js";
 
 const SYNC_TTL_MS = 12 * 60 * 60 * 1000; // TVmaze fair-use friendly cache window
 
@@ -27,7 +28,11 @@ export default {
     }
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(syncAll(env));
+    ctx.waitUntil((async () => {
+      const sync = await syncAll(env);
+      const announce = await announceEngine(env, { dryRun: false });
+      return { sync, announce };
+    })());
   },
 };
 
@@ -52,6 +57,8 @@ async function route(request, env, method, pathname, sp) {
     if (pathname === "/api/tonight") return tonight(env, sp);
     if (pathname === "/api/schedule") return scheduleRoute(sp);
     if (pathname === "/api/follows") return listFollows(env, sp);
+    if (pathname === "/api/notify/status") return notifyStatus(env);
+    if (pathname === "/api/notify/preview") return notifyPreview(env, sp);
     if (pathname === "/api/movies/search") return movieSearchRoute(env, sp);
     if (pathname === "/api/movies/trending") {
       return tmdbRoute(env, () => trendingMovies(env).then((list) => ({ count: list.length, results: list.slice(0, 20) })));
@@ -67,6 +74,8 @@ async function route(request, env, method, pathname, sp) {
     if (pathname === "/api/follow") return setFollow(env, request);
     if (pathname === "/api/watched") return watchedRoute(env, request);
     if (pathname === "/api/movie-state") return movieStateRoute(env, request);
+    if (pathname === "/api/notify/test") return notifyTest(env, request);
+    if (pathname === "/api/notify/simulate") return notifySimulate(env, request);
     if (pathname === "/api/sync") return syncRoute(env, request, sp);
   }
 
@@ -76,7 +85,7 @@ async function route(request, env, method, pathname, sp) {
 function apiDocs() {
   return json({
     name: "Seasonbook",
-    build: "weekend-1 spine",
+    build: "weekend-2 · notification engine",
     app: "/",
     endpoints: {
       "GET /": "internal PWA (search / follow / tonight / ICS feed)",
@@ -97,11 +106,16 @@ function apiDocs() {
       "GET /api/shows/:id/episodes?deviceId=": "episode list with per-device watched flags",
       "POST /api/watched": "{ deviceId, episodeId, state: 'add' or 'remove' }",
       "GET /export.json?deviceId=": "full copy: shows + watchmarks + movies (JSON)",
+      "GET /api/notify/status": "notification engine state (FCM configured?) + setup hint",
+      "GET /api/notify/preview?minutes=75": "dry-run: exactly what the hourly announce would send now",
+      "POST /api/notify/test": "owner tool — push a test message to a topic (closed unless SB_OPEN_TOOLS)",
+      "POST /api/notify/simulate": "owner tool — inject/remove a ghost airtime to exercise the engine (same gate)",
     },
     notes: [
-      "deviceId stands in for accounts until weekend 3 — do NOT deploy publicly as-is (POST /api/sync is open).",
+      "deviceId stands in for accounts until weekend 3.",
+      "Owner tools stay closed on public deploys: POST /api/sync needs SB_OPEN_SYNC; /api/notify/test and /api/notify/simulate need SB_OPEN_TOOLS. Cron runs regardless.",
       "Episode and airtime data by TVmaze; movie data by TMDB(©). Keep both attributions visible.",
-      "TMDB routes answer 501 {error:'tmdb-token-missing'} until TMDB_TOKEN is configured (local: .dev.vars; prod: wrangler secret).",
+      "TMDB routes answer 501 {error:'tmdb-token-missing'} with no TMDB_TOKEN. FCM announce skips with 501 {error:'fcm-service-account-missing'} — configure via .dev.vars locally, wrangler secret in prod.",
     ],
   });
 }
@@ -459,6 +473,10 @@ function parseIds(sp) {
 }
 
 function clampNum(raw, fallback, min, max) {
+  // absent/empty/whitespace params must fall back — Number(null) is 0, NOT NaN,
+  // so an bare `null` used to collapse onto `min` instead of the fallback (silent
+  // window bugs: preview?minutes defaulted to 5h instead of 75m, tonight?window to 1).
+  if (raw === null || raw === undefined || String(raw).trim() === "") return fallback;
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(Math.max(n, min), max);
@@ -536,4 +554,133 @@ async function exportRoute(env, sp) {
       },
     }
   );
+}
+
+/* ── Notification engine (weekend 2) ─────────────────────────────────────
+   Contract (design/BRIEF.md): FCM topic-per-show + device reschedule; one push
+   per episode; topics the app subscribes itself to as "show-<tvmazeId>".      */
+
+const ANNOUNCE_LEAD_MIN = 75;     // hourly cron → episodes announce once, ≤75 min before air
+const GHOST_EPISODE_ID = 99100001; // /api/notify/simulate writes this id; smoke cleans it up
+
+function ownerOpen(env) {
+  return !!env.SB_OPEN_TOOLS;
+}
+
+async function notifyStatus(env) {
+  return json({
+    status: "ok",
+    fcm: {
+      state: fcmConfigured(env) ? "configured" : "not-configured",
+      effect: fcmConfigured(env)
+        ? "the hourly cron announces upcoming episodes to show topics"
+        : "announces are skipped; the engine still runs dry (preview + ledger checks work)",
+      setup: "console.firebase.google.com → Project settings → Service accounts → 'Generate new private key' → paste the whole JSON as FCM_SERVICE_ACCOUNT (local: .dev.vars; prod: wrangler secret put FCM_SERVICE_ACCOUNT)",
+    },
+    engine: {
+      mode: "topic-per-show",
+      trigger: "hourly cron (sync + announce)",
+      lead: `≤ ${ANNOUNCE_LEAD_MIN} min before air, exactly once`,
+      dedupe: "announcements ledger",
+    },
+    client: {
+      channel_id: "airtime must exist on the device or tray payloads drop silently",
+      subscription: "app subscribes itself: FirebaseMessaging.subscribeToTopic('show-<tvmazeId>')",
+    },
+  });
+}
+
+async function announcementCandidates(env, leadMinutes = ANNOUNCE_LEAD_MIN) {
+  const now = Date.now();
+  const { results } = await env.DB.prepare(
+    `SELECT e.id, e.show_id, e.season, e.number, e.name AS episode_name, e.air_utc,
+            s.name AS show_name, s.network
+     FROM episodes e JOIN shows s ON s.id = e.show_id
+     WHERE e.air_utc IS NOT NULL
+       AND e.air_utc >= ?1 AND e.air_utc <= ?2
+       AND NOT EXISTS (SELECT 1 FROM announcements a WHERE a.episode_id = e.id AND a.kind = 'air')
+     ORDER BY e.air_utc ASC LIMIT 50`
+  ).bind(new Date(now).toISOString(), new Date(now + leadMinutes * 60000).toISOString()).all();
+  return results;
+}
+
+async function announceEngine(env, { dryRun = false } = {}) {
+  const rows = await announcementCandidates(env);
+  if (dryRun || rows.length === 0) {
+    return { status: "ok", dryRun: true, count: rows.length, items: rows.map(airtimeMessage) };
+  }
+  if (!fcmConfigured(env)) {
+    return { status: "ok", count: rows.length, skipped: "fcm-service-account-missing", items: rows.map(airtimeMessage) };
+  }
+  const sent = [];
+  for (const row of rows) {
+    const item = airtimeMessage(row);
+    try {
+      await sendToTopic(env, item);
+      await env.DB.prepare(
+        "INSERT OR IGNORE INTO announcements (episode_id, kind, air_utc, announced_at) VALUES (?1, 'air', ?2, ?3)"
+      ).bind(row.id, row.air_utc, Date.now()).run();
+      sent.push({ ok: true, topic: item.topic, title: item.title, episode_id: row.id });
+    } catch (err) {
+      // one bad message must not sink the batch or the ledger for the others
+      sent.push({ ok: false, topic: item.topic, title: item.title, episode_id: row.id, error: String(err?.message || err) });
+    }
+  }
+  return { status: "ok", count: sent.length, sent };
+}
+
+async function notifyPreview(env, sp) {
+  const minutes = clampNum(sp.get("minutes"), ANNOUNCE_LEAD_MIN, 5, 12 * 60);
+  const rows = await announcementCandidates(env, minutes);
+  const now = Date.now();
+  return json({
+    status: "dry-run",
+    window: { from: new Date(now).toISOString(), to: new Date(now + minutes * 60000).toISOString() },
+    fcm: fcmConfigured(env) ? "configured" : "not-configured (preview is credential-free by design)",
+    count: rows.length,
+    items: rows.map(airtimeMessage),
+  });
+}
+
+async function notifyTest(env, request) {
+  if (!ownerOpen(env)) {
+    return json({ error: "closed on this deployment — set SB_OPEN_TOOLS to open owner tools locally / via wrangler vars" }, 503);
+  }
+  if (!fcmConfigured(env)) {
+    return json({ error: "fcm-service-account-missing", setup: "paste the service-account key JSON into FCM_SERVICE_ACCOUNT (.dev.vars locally, wrangler secret in prod)" }, 501);
+  }
+  const body = await request.json().catch(() => null);
+  const topic = String(body?.topic || "announce-test").slice(0, 60);
+  await sendToTopic(env, {
+    topic,
+    title: "Seasonbook test",
+    body: "If this lands, the FCM v1 relay works and your device's topic subscription does too.",
+    data: { type: "test", sent_at: new Date().toISOString() },
+  });
+  return json({ ok: true, topic, note: "any subscribed device on this topic got it — the app has a 'subscribe to test topic' button" });
+}
+
+async function notifySimulate(env, request) {
+  if (!ownerOpen(env)) {
+    return json({ error: "closed on this deployment — set SB_OPEN_TOOLS to open owner tools locally / via wrangler vars" }, 503);
+  }
+  const body = await request.json().catch(() => null);
+  if (body?.action === "remove") {
+    await env.DB.prepare("DELETE FROM episodes WHERE id = ?1").bind(GHOST_EPISODE_ID).run();
+    await env.DB.prepare("DELETE FROM announcements WHERE episode_id = ?1").bind(GHOST_EPISODE_ID).run();
+    return json({ ok: true, removed: GHOST_EPISODE_ID });
+  }
+  const showId = Number(body?.showId);
+  if (!showId) return json({ error: "showId required (169 = Breaking Bad, cached by smoke)" }, 400);
+  const minutes = clampNum(body?.minutesFromNow, 60, 1, ANNOUNCE_LEAD_MIN);
+  const show = await env.DB.prepare("SELECT id FROM shows WHERE id = ?1").bind(showId).first();
+  if (!show) return json({ error: "show not cached — follow it or POST /api/sync first", showId }, 404);
+  const airUtc = new Date(Date.now() + minutes * 60000).toISOString();
+  await env.DB.prepare(
+    `INSERT INTO episodes (id, show_id, season, number, name, airdate, air_utc, runtime, synced_at)
+     VALUES (?1, ?2, 42, 1, ?3, ?4, ?5, 45, ?6)
+     ON CONFLICT(id) DO UPDATE SET air_utc = ?5, name = ?3, airdate = ?4`
+  ).bind(GHOST_EPISODE_ID, showId, "Simulated airtime", airUtc.slice(0, 10), airUtc, Date.now()).run();
+  await env.DB.prepare("DELETE FROM announcements WHERE episode_id = ?1").bind(GHOST_EPISODE_ID).run();
+  return json({ ok: true, episode: { id: GHOST_EPISODE_ID, show_id: showId, air_utc: airUtc, announced_at: null } });
 }

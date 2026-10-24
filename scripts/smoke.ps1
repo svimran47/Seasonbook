@@ -111,4 +111,43 @@ try {
   }
 }
 
+# 14. notification engine — status, owner-gate behavior, dry-run preview via a ghost episode
+$nst = Invoke-RestMethod "$base/api/notify/status"
+if ($nst.engine.mode -ne "topic-per-show") { throw "notify status: engine shape changed" }
+Write-Host ("NOTIFY    : engine {0}; fcm {1}" -f $nst.engine.mode, $nst.fcm.state)
+
+$prod = $env:SB_BASE -and $env:SB_BASE.StartsWith("https")
+if ($prod) {
+  # owner tools must be closed on prod — hitting them should fail (which we swallow by design)
+  try {
+    Invoke-RestMethod -Method Post "$base/api/notify/test" -ContentType "application/json" -Body '{"topic":"should-fail"}' | Out-Null
+    throw "notify/test unexpectedly OPEN on prod — SB_OPEN_TOOLS leaked into the deployment"
+  } catch {
+    if ($_.ErrorDetails.Message -match "should-fail" -or $_.ErrorDetails.Message -match "closed") { }
+    elseif ($_.Exception.Message -match "unexpectedly OPEN") { throw }
+  }
+  Write-Host "GATE      : owner tools closed on prod (asserted)"
+} else {
+  $simOk = $true
+  try {
+    Invoke-RestMethod -Method Post "$base/api/notify/simulate" -ContentType "application/json" -Body '{"showId":169,"minutesFromNow":60,"action":"add"}' | Out-Null
+  } catch {
+    $simOk = $false
+    if ($_.ErrorDetails.Message -match "closed on this deployment") {
+      Write-Host "SIMULATE  : closed (503) — add SB_OPEN_TOOLS=`"1`" to .dev.vars and restart dev to run the ghost-airtime checks"
+    } else { throw }
+  }
+  if ($simOk) {
+    $pv = Invoke-RestMethod "$base/api/notify/preview"
+    $ghost = $pv.items | Where-Object { $_.data.episode_id -eq "99100001" }
+    if (-not $ghost) { throw "notify preview is missing the simulated episode" }
+    if ($ghost.topic -ne "show-169") { throw "ghost episode announced on wrong topic: $($ghost.topic)" }
+    Write-Host ("PREVIEW   : {0} pending; ghost = '{1}'" -f $pv.count, $ghost.title)
+    Invoke-RestMethod -Method Post "$base/api/notify/simulate" -ContentType "application/json" -Body '{"action":"remove"}' | Out-Null
+    $pv2 = Invoke-RestMethod "$base/api/notify/preview"
+    if ($pv2.items | Where-Object { $_.data.episode_id -eq "99100001" }) { throw "ghost episode not cleaned up" }
+    Write-Host "CLEANUP   : ghost episode removed, ledger clear again"
+  }
+}
+
 Write-Host "SMOKE OK"

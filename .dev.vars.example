@@ -1,7 +1,26 @@
-# Copy this file to .dev.vars (same folder, keep the exact name) and paste your TMDB token.
-# Get a free key: https://www.themoviedb.org/ → Settings → API → Developer.
-# Both forms work:
+# Local secrets — copy to .dev.vars (same folder, exact name, never commit it) and fill what you need.
+# Everything below is optional: the app runs fully without any of these; features light up as configured.
+
+# ── Movies (TMDB) ────────────────────────────────────────────────────────────
+# Free key: https://www.themoviedb.org/ → Settings → API → Developer. Both forms work:
 #   TMDB_TOKEN="a1b2c3d4..."        (v3 api key string)
 #   TMDB_TOKEN="eyJhbGciOi..."      (v4 read-access token, starts with ey)
-# The Movies tab lights up the moment this file exists and npm run dev is restarted.
+# The Movies tab lights up the moment this is set and npm run dev is restarted.
 TMDB_TOKEN=""
+
+# ── Notifications (FCM HTTP v1, weekend 2) ───────────────────────────────────
+# The app subscribes each followed show to FCM topic "show-<tvmazeId>"; this worker
+# pushes one message per episode (≤75 min before air, ledger-deduped).
+# Steps: console.firebase.google.com → new project → Project settings → Service
+# accounts → "Generate new private key" → save the JSON → paste the WHOLE object,
+# unfolded, on this one line. Restart npm run dev afterwards.
+# Without it nothing breaks: announces are skipped and /api/notify/status says
+# "not-configured", exactly like the TMDB setup-card pattern.
+FCM_SERVICE_ACCOUNT=""
+
+# ── Owner tools (stay closed on prod; each locally-open tool has its own switch) ──
+# POST /api/sync      → open locally when SB_OPEN_SYNC is set
+# /api/notify/test    → open locally when SB_OPEN_TOOLS is set
+# /api/notify/simulate → same switch (injects a ghost airtime to exercise the engine)
+SB_OPEN_SYNC="1"
+SB_OPEN_TOOLS="1"

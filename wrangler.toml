@@ -14,6 +14,7 @@ binding = "DB"
 database_name = "seasonbook"
 database_id = "bcda74be-8caa-43a2-9714-6078e7cbd7ee"
 
-# Hourly refresh of every cached show against TVmaze fair-use TTLs (syncAll).
+# Hourly cron: syncAll (fair-use refresh of every cached show) + FCM announce engine
+# (topic-per-show, ≤75 min lead, ledger-deduped — see src/index.js announceEngine).
 [triggers]
 crons = ["0 * * * *"]

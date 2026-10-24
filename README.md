@@ -1,6 +1,6 @@
-# Seasonbook — weekend 1
+# Seasonbook
 
-The data spine: a Cloudflare Worker with a D1 cache of TVmaze (shows + episodes + exact airtimes, UTC-normalized), follows, a "tonight" query, and a subscribe-able ICS calendar feed — driven by an internal PWA.
+The data spine: a Cloudflare Worker with a D1 cache of TVmaze (shows + episodes + exact airtimes, UTC-normalized), follows, a "tonight" query, and a subscribe-able ICS calendar feed — driven by an internal PWA. Weekend 2 added the notification engine: FCM topic-per-show announce (hourly cron, ≤75 min lead, ledger-deduped) + the Android skeleton (`android/`) that polls airtimes, arms exact alarms, and shows daily digests.
 
 No accounts yet (deviceId only — that's weekend 3). No video, no piracy, ever: schedule data and legal where-to-watch only.
 
@@ -34,13 +34,27 @@ npm run smoke   # end-to-end checks against the running server
 | `GET /api/movies/trending` | TMDB trending this week |
 | `GET /api/movies/:id?deviceId=` | cached movie detail + this device's state |
 | `POST /api/movie-state` | `{deviceId, movieId, state: "want" \| "watched" \| "unwatched" \| "remove"}` |
+| `GET /api/notify/status` | notification engine state (FCM configured?) + setup hint |
+| `GET /api/notify/preview?minutes=75` | dry-run: exactly what the hourly announce would send now |
+| `POST /api/notify/test` | owner tool — push a test message to a topic (closed unless SB_OPEN_TOOLS) |
+| `POST /api/notify/simulate` | owner tool — inject/remove a ghost airtime to exercise the engine (same gate) |
 | `GET /export.json?deviceId=` | full copy: shows + watchmarks + movies (JSON) |
 
 TMDB needs one free key: create it at themoviedb.org (Settings → API → Developer). Locally copy `.dev.vars.example` to `.dev.vars` and paste the token; in production `wrangler secret put TMDB_TOKEN`. Without it every route stays up — TMDB routes answer `501 {error: "tmdb-token-missing"}` and the Movies tab shows the setup card.
 
 Localhost-first is a project decision: domain registration and deployment happen at the final build — everything is tested here until then.
 
-Sync has a 12h cache TTL against TVmaze fair use; hourly `scheduled` refresh is wired for after deploy.
+Sync has a 12h cache TTL against TVmaze fair use; the hourly `scheduled` cron runs `syncAll` **and** the FCM announce engine (topic-per-show, one push per episode, `announcements` ledger dedupe). Notifications copy and channels follow `design/BRIEF.md`; quietly skipped when `FCM_SERVICE_ACCOUNT` is absent (check `/api/notify/status`). Owner tools (`/api/sync`, `/api/notify/test`, `/api/notify/simulate`) stay closed on public deploys unless their `SB_OPEN_*` vars are set.
+
+## Weekend 2 — notification engine + Android skeleton (2026-10-24)
+
+- **Worker:** `src/fcm.js` (FCM HTTP v1 via `jose` RS256 service-account JWT, token cached), hourly announce engine, 4 `/api/notify/*` routes, `announcements` ledger table, smoke steps for status/preview/ghost-airtime/owner-gate.
+- **Android:** `android/` skeleton (Gradle 8.10.2 · AGP 8.7.3 · Kotlin 2.0.21 · minSdk 24): FCM `MessagingService`, topic subscribe/unsubscribe + test topic, `PollWorker` (4 h → arm exact alarms at T-2 h), daily `DigestWorker`, quiet hours, Watched action posting `/api/watched`. Builds green without Firebase (graceful setup-card pattern); unit tests for the pure logic ride CI (`.github/workflows/android-ci.yml`).
+- **Remaining manual:** story owns Firebase project + `google-services.json` in `android/app/` + `FCM_SERVICE_ACCOUNT` secret; OEM battery checks on stock/Samsung/Xiaomi per `android/README.md` checklist.
+
+## Weekend 3 (next)
+
+Real accounts (replacing deviceId — keep every device's history), TV Time GDPR import (CSV/ZIP ingest), CSV export alongside JSON.
 
 ## Deploy (done, first deployment 2026-10-23)
 
@@ -56,6 +70,6 @@ Localhost-first still applies to code: edit locally, `npm run dev`, `npm run smo
 
 **Before going public:** protect `POST /api/sync` (add a token to `.dev.vars`), replace deviceId with real accounts (weekend 3), keep the TVmaze attribution, respect their fair use.
 
-## Weekend 2 (next)
+## Weekend 3 (next)
 
-Android skeleton: follow list → FCM topic-per-show subscription, local notifications at airtime, daily digest via WorkManager. Manual checks on 3 OEM skins (stock / Samsung / Xiaomi battery profiles).
+Real accounts (replacing deviceId). Manual checks on 3 OEM skins (stock / Samsung / Xiaomi battery profiles).

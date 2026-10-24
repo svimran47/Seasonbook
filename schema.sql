@@ -64,3 +64,13 @@ CREATE TABLE IF NOT EXISTS movie_marks (
   PRIMARY KEY (device_id, movie_id)
 );
 CREATE INDEX IF NOT EXISTS idx_movie_state ON movie_marks (state, device_id);
+
+-- Announcements ledger (weekend 2): the FCM announce engine's dedupe memory —
+-- one push per episode per kind ('air' now; later 'premiere' / 'digest' can join).
+CREATE TABLE IF NOT EXISTS announcements (
+  episode_id   INTEGER NOT NULL,
+  kind         TEXT NOT NULL,
+  air_utc      TEXT,
+  announced_at INTEGER NOT NULL,
+  PRIMARY KEY (episode_id, kind)
+);
